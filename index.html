@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ASMR Pachinko Idle - Stable TMA</title>
+    <title>ASMR Pachinko Idle - iOS Optimized</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
@@ -27,7 +27,6 @@
             opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 15;
         }
 
-        /* Top Right Buttons */
         .top-btn {
             position: absolute; top: 15px; z-index: 20;
             background: transparent; border: none; font-size: 24px; cursor: pointer;
@@ -67,7 +66,6 @@
 
         .upgrade-btn *, .top-btn *, .btn-skill * { pointer-events: none; }
 
-        /* --- MODAL UI --- */
         .modal-overlay {
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); z-index: 100; justify-content: center; align-items: center; flex-direction: column;
@@ -164,7 +162,6 @@
     <canvas id="gameCanvas"></canvas>
 
 <script>
-    // --- CRITICAL VARIABLES RE-ADDED ---
     let width = window.innerWidth || 400; 
     let height = window.innerHeight || 800; 
     let isGamePaused = false; 
@@ -175,7 +172,6 @@
     const shopHeight = 100; 
     let paddle = { x: width / 2, y: 100, width: 60, height: 10, vx: 4 };
 
-    // --- TELEGRAM INIT & SAFE HAPTICS ---
     const tg = window.Telegram.WebApp;
     tg.expand();
 
@@ -190,7 +186,6 @@
         }
     }
 
-    // --- SAFE ADSGRAM SDK INTEGRATION ---
     let AdController = null;
     if (window.Adsgram) { AdController = window.Adsgram.init({ blockId: "25014" }); }
 
@@ -246,7 +241,6 @@
     const modalDesc = document.getElementById('modalDesc'); const btnModalAd = document.getElementById('btnModalAd');
     const btnModalClaim = document.getElementById('btnModalClaim');
 
-    // Economy & Stats
     let prestigeLevel = 0; const PRESTIGE_COST = 1000000; 
     const themes = [
         { name: "Classic", bg: "#111111", trail: "rgba(17, 17, 17, 0.35)", pegOff: "#444444", textMain: "#ffeb3b" },
@@ -277,7 +271,7 @@
     function getFeverDuration() { return 600 + (metaSkills.feverTime.level * 60); }
     function getMutationRate() { return 0.015 + (metaSkills.mutationRate.level * 0.01); }
 
-    const SAVE_KEY = 'asmrPachinkoSaveData_v12'; // Safe fresh start
+    const SAVE_KEY = 'asmrPachinkoSaveData_v12'; 
 
     let stats = { ballsDropped: 0, goldHit: 0, portalsHit: 0, feversTriggered: 0 };
     let activeMissions = []; let missionsCompleted = 0;
@@ -496,7 +490,6 @@
         ctx.fillStyle = feverCooldown > 0 ? "#555" : (feverActive ? `hsl(${Date.now() % 360}, 100%, 50%)` : "#ff007f"); ctx.fillRect(barX, barY, barWidth * fillPercent, 15);
         ctx.strokeStyle = feverActive ? "#fff" : "#444"; ctx.lineWidth = 2; ctx.strokeRect(barX, barY, barWidth, 15);
         ctx.fillStyle = "#fff"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; let barText = feverActive ? "FEVER MODE ACTIVE!" : (feverCooldown > 0 ? "COOLDOWN..." : "FEVER"); ctx.fillText(barText, width / 2, barY + 12);
-        if (feverActive) { ctx.shadowBlur = 20; ctx.shadowColor = `hsl(${Date.now() % 360}, 100%, 50%)`; ctx.strokeRect(barX, barY, barWidth, 15); ctx.shadowBlur = 0; }
     }
 
     function resolveCollisions() {
@@ -570,8 +563,9 @@
             paddle.x += currentPaddleSpeed; paddle.vx = currentPaddleSpeed; 
             if (paddle.x - paddle.width/2 < 0 || paddle.x + paddle.width/2 > width) paddle.vx *= -1;
             
-            ctx.fillStyle = '#fff'; ctx.shadowBlur = feverActive ? 20 : 10; ctx.shadowColor = feverActive ? `hsl(${Date.now() % 360}, 100%, 50%)` : currentTheme.textMain;
-            ctx.fillRect(paddle.x - paddle.width/2, paddle.y - paddle.height/2, paddle.width, paddle.height); ctx.shadowBlur = 0;
+            // --- REMOVED shadowBlur (iOS Optimization) ---
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(paddle.x - paddle.width/2, paddle.y - paddle.height/2, paddle.width, paddle.height);
 
             let currentMaxBalls = feverActive ? getMaxBalls() * 2 : getMaxBalls();
             if (feverActive && balls.length < currentMaxBalls) {
@@ -588,19 +582,37 @@
                 if (bk.flashTimer > 0) bk.flashTimer--;
             }
 
+            // --- iOS GPU OPTIMIZED PEG RENDERING (Fake Glow) ---
             for (let p of pegs) {
-                p.pulse += 0.1; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                if (p.flashTimer > 0) { ctx.fillStyle = '#fff'; ctx.shadowBlur = 15; ctx.shadowColor = '#fff'; p.flashTimer--; } 
+                p.pulse += 0.1; 
+                
+                if (p.flashTimer > 0) { 
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 2.5, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.fill(); ctx.closePath();
+                    ctx.fillStyle = '#fff'; p.flashTimer--; 
+                } 
                 else { 
-                    if (p.type === 1) { ctx.fillStyle = '#ffd700'; ctx.shadowBlur = 10; ctx.shadowColor = '#ffd700'; } 
-                    else if (p.type === 2) { ctx.fillStyle = '#ff3300'; ctx.shadowBlur = 10 + Math.sin(p.pulse)*5; ctx.shadowColor = '#ff3300'; } 
-                    else if (p.type === 3) { ctx.fillStyle = '#aa00ff'; ctx.shadowBlur = 15; ctx.shadowColor = '#aa00ff'; } 
-                    else { ctx.fillStyle = currentTheme.pegOff; ctx.shadowBlur = 0; } 
+                    if (p.type === 1) { 
+                        ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 2, 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(255, 215, 0, 0.3)'; ctx.fill(); ctx.closePath();
+                        ctx.fillStyle = '#ffd700'; 
+                    } 
+                    else if (p.type === 2) { 
+                        ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * (1.5 + Math.sin(p.pulse)*0.5), 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(255, 51, 0, 0.3)'; ctx.fill(); ctx.closePath();
+                        ctx.fillStyle = '#ff3300'; 
+                    } 
+                    else if (p.type === 3) { 
+                        ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 2.5, 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(170, 0, 255, 0.3)'; ctx.fill(); ctx.closePath();
+                        ctx.fillStyle = '#aa00ff'; 
+                    } 
+                    else { ctx.fillStyle = currentTheme.pegOff; } 
                 }
-                ctx.fill(); ctx.closePath();
+                
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill(); ctx.closePath();
                 if (p.type === 3 && p.flashTimer <= 0) { ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 0.5, 0, Math.PI * 2); ctx.fillStyle = '#000'; ctx.fill(); ctx.closePath(); }
             }
-            ctx.shadowBlur = 0;
 
             if (!goblin.active && !feverActive && Date.now() - lastGoblinSpawnTime > 60000) { if (Math.random() < 0.005) spawnGoblin(); }
             if (goblin.active) {
