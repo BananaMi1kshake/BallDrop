@@ -161,40 +161,57 @@
 
 <script>
     // --- TELEGRAM & ADSGRAM INTEGRATION ---
-    const tg = window.Telegram.WebApp;
-    tg.expand(); // Fullscreen
-    tg.enableClosingConfirmation(); // Don't close accidental swaps
+// 1. Better Initialization
+let AdController = null;
 
-    // Replace YOUR_BLOCK_ID with your actual ID from Adsgram.ai
-    const AdController = window.Adsgram ? window.Adsgram.init({ blockId: "25014" }) : null;
+function getAdController() {
+    if (AdController) return AdController;
+    if (window.Adsgram) {
+        AdController = window.Adsgram.init({ blockId: "25014" });
+        return AdController;
+    }
+    return null;
+}
 
-    const AdManager = {
-        isAdPlaying: false,
-        showRewardedVideo: async function(rewardName, onSuccess, onFail) {
-            if (!AdController) {
-                // Fallback for testing outside Telegram
-                if(confirm(`[DEV MODE] Watch ad for ${rewardName}?`)) onSuccess(); else if(onFail) onFail();
-                return;
-            }
-            this.isAdPlaying = true;
-            if(audioCtx) audioCtx.suspend(); 
-            
-            try {
-                const result = await AdController.show();
-                if (result.done) onSuccess(); else if(onFail) onFail();
-            } catch (e) {
-                console.error("Ad failed", e);
+const AdManager = {
+    isAdPlaying: false,
+    showRewardedVideo: async function(rewardName, onSuccess, onFail) {
+        const controller = getAdController();
+        
+        // If we still don't have a controller, try to alert the error
+        if (!controller) {
+            console.error("Adsgram SDK not found. Ensure you are testing inside Telegram.");
+            // Keep this ONLY for local browser testing. Remove the confirm() line below when you go live!
+            if(confirm(`[DEV] Ad SDK missing. Simulate reward for ${rewardName}?`)) onSuccess();
+            return;
+        }
+
+        this.isAdPlaying = true;
+        if(audioCtx) audioCtx.suspend(); 
+        
+        try {
+            // This is the real call to Adsgram
+            const result = await controller.show();
+            if (result.done) {
+                onSuccess(); // Paid reward!
+            } else {
+                console.log("User skipped the ad.");
                 if(onFail) onFail();
             }
-            
+        } catch (e) {
+            console.error("Adsgram Error:", e);
+            // If the ad fails to load (no ads available), we usually give the reward anyway 
+            // so the user doesn't get frustrated, or just call onFail.
+            if(onFail) onFail(); 
+        } finally {
             this.isAdPlaying = false;
             if(!isAudioMuted && audioCtx) audioCtx.resume();
-        },
-        showInterstitial: async function(onClose) {
-            // Interstitials usually use a different blockId, but we'll use the same for simplicity
-            await this.showRewardedVideo("Interstitial", onClose, onClose);
         }
-    };
+    },
+    showInterstitial: async function(onClose) {
+        await this.showRewardedVideo("Interstitial", onClose, onClose);
+    }
+};
 
     const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
     const moneyText = document.getElementById('moneyText'); const btnPrestige = document.getElementById('btnPrestige');
