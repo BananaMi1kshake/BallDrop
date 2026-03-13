@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ASMR Pachinko Idle - Telegram Edition</title>
+    <title>ASMR Pachinko Idle - TMA Stable Release</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
@@ -65,6 +65,7 @@
         .btn-cost { display: block; font-size: 16px; color: #ffeb3b; }
         .btn-level { display: block; font-size: 11px; color: #888; margin-top: 3px; }
 
+        /* Guarantees that clicking the text inside a button targets the button itself */
         .upgrade-btn *, .top-btn *, .btn-skill * { pointer-events: none; }
 
         /* --- MODAL UI --- */
@@ -167,18 +168,23 @@
     <canvas id="gameCanvas"></canvas>
 
 <script>
-    // --- TELEGRAM INIT & HAPTICS ---
+    // --- TELEGRAM INIT & HAPTICS (THROTTLED) ---
     const tg = window.Telegram.WebApp;
     tg.expand(); // Forces full screen
 
+    let lastHapticTime = 0;
     function haptic(style = 'light') {
         if (tg.HapticFeedback) {
-            // style can be 'light', 'medium', 'heavy', 'rigid', 'soft'
-            tg.HapticFeedback.impactOccurred(style);
+            let now = Date.now();
+            // Prevent TMA Bridge flood by capping haptics to once every 50ms
+            if (now - lastHapticTime > 50) {
+                tg.HapticFeedback.impactOccurred(style);
+                lastHapticTime = now;
+            }
         }
     }
 
-    // --- ADSGRAM SDK INTEGRATION ---
+    // --- SAFE ADSGRAM SDK INTEGRATION ---
     let AdController = null;
     if (window.Adsgram) {
         // Initialize with your specific block ID
@@ -198,20 +204,29 @@
             this.isAdPlaying = true;
             if(audioCtx && audioCtx.state === 'running') audioCtx.suspend(); 
             
+            // SAFETY FALLBACK: Unpause game if ad hangs for 12 seconds
+            let hangTimeout = setTimeout(() => {
+                if (this.isAdPlaying) {
+                    console.error("Adsgram timed out. Unpausing game.");
+                    this.isAdPlaying = false;
+                    if(!isAudioMuted && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                    if(onFail) onFail();
+                }
+            }, 12000);
+            
             AdController.show().then((result) => {
-                // User successfully watched the ad
+                clearTimeout(hangTimeout); // Ad succeeded
                 this.isAdPlaying = false;
                 if(!isAudioMuted && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
                 onSuccess();
             }).catch((result) => {
-                // User closed the ad early or network error
+                clearTimeout(hangTimeout); // Ad failed or user closed it early
                 this.isAdPlaying = false;
                 if(!isAudioMuted && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
                 if(onFail) onFail();
             });
         },
         showInterstitial: function(onClose) {
-            // Adsgram relies heavily on rewarded, so we map interstitial to the standard show() call as well
             if (!AdController) {
                 if (onClose) onClose();
                 return;
@@ -220,11 +235,21 @@
             this.isAdPlaying = true;
             if(audioCtx && audioCtx.state === 'running') audioCtx.suspend();
             
+            let hangTimeout = setTimeout(() => {
+                if (this.isAdPlaying) {
+                    this.isAdPlaying = false;
+                    if(!isAudioMuted && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                    if (onClose) onClose();
+                }
+            }, 12000);
+            
             AdController.show().then((result) => {
+                clearTimeout(hangTimeout);
                 this.isAdPlaying = false;
                 if(!isAudioMuted && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
                 if (onClose) onClose();
             }).catch((result) => {
+                clearTimeout(hangTimeout);
                 this.isAdPlaying = false;
                 if(!isAudioMuted && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
                 if (onClose) onClose();
@@ -279,7 +304,7 @@
     function getFeverDuration() { return 600 + (metaSkills.feverTime.level * 60); }
     function getMutationRate() { return 0.015 + (metaSkills.mutationRate.level * 0.01); }
 
-    const SAVE_KEY = 'asmrPachinkoSaveData_v8'; // Bumped for clean start
+    const SAVE_KEY = 'asmrPachinkoSaveData_v9'; // Clean slate for Stable TMA build
 
     let stats = { ballsDropped: 0, goldHit: 0, portalsHit: 0, feversTriggered: 0 };
     let activeMissions = []; let missionsCompleted = 0;
@@ -351,8 +376,6 @@
         titleText.style.color = currentTheme.textMain; 
         titleText.style.textShadow = `0 0 10px ${currentTheme.textMain}`;
         multiplierText.innerText = `Multiplier: x${prestigeMultiplier} (${currentTheme.name})`;
-        
-        // Sync Telegram header color with game background for a seamless look
         if(tg && tg.setHeaderColor) tg.setHeaderColor(currentTheme.bg);
     }
 
@@ -374,10 +397,8 @@
             } else { 
                 if (u.elCost.innerText !== costStr) u.elCost.innerText = costStr;
                 if (u.elLvl.innerText !== lvlStr) u.elLvl.innerText = lvlStr;
-                
                 let isDisabled = money < currentCost;
                 if (u.btn.disabled !== isDisabled) u.btn.disabled = isDisabled; 
-                
                 let borderColor = isDisabled ? '#222' : '#4fc3f7';
                 if (u.btn.style.borderColor !== borderColor) u.btn.style.borderColor = borderColor;
             }
@@ -480,7 +501,6 @@
                 
                 currentTheme = themes[prestigeLevel % themes.length];
                 applyThemeColors();
-                
                 updateUI(); saveGame();
             });
         }
@@ -506,7 +526,20 @@
 
     class FloatingText { constructor(x, y, text, color, size = 16) { this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.vy = -1.5; this.size = size; } update() { this.y += this.vy; this.life -= 0.02; } draw() { ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.font = `bold ${this.size}px sans-serif`; ctx.textAlign = "center"; ctx.fillText(this.text, this.x, this.y); ctx.globalAlpha = 1.0; } }
     class Particle { constructor(x, y, color) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 6; this.vy = (Math.random() - 0.5) * 6; this.life = 1.0; this.decay = Math.random() * 0.05 + 0.02; this.color = color; this.size = Math.random() * 3 + 1; } update() { this.x += this.vx; this.y += this.vy; this.life -= this.decay; } draw() { ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1.0; } }
-    class Ball { constructor(x, y) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 2; this.vy = feverActive ? 5 : 2; this.r = Math.min(width, height) * 0.015; this.color = `hsl(${Math.random() * 360}, 100%, 70%)`; this.combo = 0; } update() { this.vy += gravity; this.x += this.vx; this.y += this.vy; if (this.x - this.r < 0) { this.x = this.r; this.vx *= -bounceFactor; } if (this.x + this.r > width) { this.x = width - this.r; this.vx *= -bounceFactor; } } draw() { if (this.combo > 5 || feverActive) { ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 4, 0, Math.PI * 2); ctx.fillStyle = feverActive ? `hsla(${Math.random()*360}, 100%, 50%, 0.5)` : "rgba(255, 255, 255, 0.5)"; ctx.fill(); ctx.closePath(); } ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fillStyle = this.combo > 5 || feverActive ? '#fff' : this.color; ctx.fill(); ctx.closePath(); } }
+    
+    class Ball { 
+        constructor(x, y) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 2; this.vy = feverActive ? 5 : 2; this.r = Math.min(width, height) * 0.015; this.color = `hsl(${Math.random() * 360}, 100%, 70%)`; this.combo = 0; } 
+        update() { 
+            this.vy += gravity; this.x += this.vx; this.y += this.vy; 
+            if (this.x - this.r < 0) { this.x = this.r; this.vx *= -bounceFactor; } 
+            if (this.x + this.r > width) { this.x = width - this.r; this.vx *= -bounceFactor; } 
+            
+            // --- PHYSICS FAILSAFE ---
+            // If physics bugs out and creates a NaN math error, force the ball off-screen to be cleanly deleted
+            if (isNaN(this.x) || isNaN(this.y)) { this.y = height + 500; }
+        } 
+        draw() { if (this.combo > 5 || feverActive) { ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 4, 0, Math.PI * 2); ctx.fillStyle = feverActive ? `hsla(${Math.random()*360}, 100%, 50%, 0.5)` : "rgba(255, 255, 255, 0.5)"; ctx.fill(); ctx.closePath(); } ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fillStyle = this.combo > 5 || feverActive ? '#fff' : this.color; ctx.fill(); ctx.closePath(); } 
+    }
 
     function initBoard() {
         pegs = []; buckets = []; const rows = 10; const cols = 8; const spacingX = width / cols; const boardHeight = height - shopHeight - 80; const spacingY = boardHeight * 0.8 / rows; const startY = height * 0.2;
