@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ASMR Pachinko Idle - Telegram Edition</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://sad.adsgram.ai/js/adsgram-ad-sdk.js"></script>
+    <style>
+        body {
+            margin: 0; padding: 0; background-color: #111; overflow: hidden;
+            color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none; user-select: none; transition: background-color 1s ease;
+        }
+        canvas { display: block; }
+        
+        #header { position: absolute; top: 15px; left: 15px; pointer-events: none; z-index: 10;}
+        h1 { margin: 0; font-size: 28px; color: #ffeb3b; text-shadow: 0 0 10px #ffeb3b; transition: color 1s; }
+        p { margin: 5px 0 0 0; color: #aaa; font-size: 14px; }
+        #multiplierText { font-size: 16px; color: #4fc3f7; display: block; margin-top: 5px; font-weight: bold;}
+        #shardText { font-size: 16px; color: #e040fb; display: none; margin-top: 5px; font-weight: bold; text-shadow: 0 0 8px #e040fb;}
+        
+        #saveIndicator {
+            position: absolute; top: 15px; right: 145px; font-size: 12px; color: #888;
+            opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 15;
+        }
+
+        .top-btn {
+            position: absolute; top: 15px; z-index: 20;
+            background: transparent; border: none; font-size: 24px; cursor: pointer;
+            transition: transform 0.3s; padding: 0; text-shadow: 0 0 5px rgba(255,255,255,0.5);
+        }
+        #btnSettings { right: 15px; } #btnSettings:hover { transform: rotate(90deg); }
+        #btnMissions { right: 55px; } #btnMissions:hover { transform: scale(1.1); }
+        #btnSkills { right: 95px; display: none; } #btnSkills:hover { transform: scale(1.1); }
+        
+        .notify-pulse { animation: greenPulse 1s infinite alternate; }
+        @keyframes greenPulse { from { text-shadow: 0 0 5px #0f0; transform: scale(1); } to { text-shadow: 0 0 20px #0f0; transform: scale(1.15); } }
+
+        #btnPrestige {
+            position: absolute; top: 55px; right: 15px; z-index: 20;
+            background: linear-gradient(45deg, #ff007f, #7f00ff); border: 2px solid #fff; border-radius: 8px; color: white;
+            padding: 8px 12px; font-weight: bold; cursor: pointer; box-shadow: 0 0 15px rgba(255, 0, 127, 0.5);
+            display: none; animation: pulse 1.5s infinite alternate;
+        }
+        @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.05); } }
+
+        #shop {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 100px;
+            background: rgba(10, 10, 10, 0.95); backdrop-filter: blur(5px);
+            display: flex; justify-content: space-around; padding: 10px 5px;
+            box-sizing: border-box; border-top: 1px solid #333; z-index: 10;
+        }
+        
+        .upgrade-btn {
+            flex: 1; margin: 0 5px; padding: 8px; background: #222; border: 2px solid #444; border-radius: 8px;
+            color: white; font-weight: bold; text-align: center; cursor: pointer; transition: 0.2s;
+        }
+        .upgrade-btn:disabled { opacity: 0.4; border-color: #111; cursor: not-allowed; }
+        .upgrade-btn:not(:disabled):active { transform: scale(0.95); background: #333; }
+        .btn-title { display: block; font-size: 13px; margin-bottom: 2px; color: #4fc3f7; }
+        .btn-cost { display: block; font-size: 16px; color: #ffeb3b; }
+        .btn-level { display: block; font-size: 11px; color: #888; margin-top: 3px; }
+
+        .upgrade-btn *, .top-btn *, .btn-skill * { pointer-events: none; }
+
+        .modal-overlay {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); z-index: 100; justify-content: center; align-items: center; flex-direction: column;
+        }
+        .modal-box {
+            background: #1a1a24; border: 2px solid #4fc3f7; border-radius: 12px; padding: 25px;
+            text-align: center; box-shadow: 0 0 30px rgba(79, 195, 247, 0.4); max-width: 80%; width: 320px; max-height: 80%; overflow-y: auto;
+        }
+        .modal-box h2 { margin-top: 0; color: #ffeb3b; font-size: 24px; }
+        .modal-box p { color: #ddd; font-size: 16px; margin-bottom: 20px; }
+        
+        .list-item { background: #222; border: 1px solid #555; border-radius: 8px; padding: 10px; margin-bottom: 10px; text-align: left; }
+        .list-desc { font-size: 14px; color: #fff; margin-bottom: 5px; }
+        .mission-progress { width: 100%; background: #000; height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 8px; }
+        .mission-fill { height: 100%; background: #4fc3f7; width: 0%; transition: width 0.3s; }
+        
+        .btn-ad { display: block; width: 100%; background: linear-gradient(45deg, #ff007f, #7f00ff); color: white; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 15px; font-weight: bold; font-size: 16px; animation: pulse 1.5s infinite alternate; }
+        .btn-claim { display: block; width: 100%; background: #4caf50; color: white; padding: 8px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; transition: 0.2s; }
+        .btn-claim:hover { background: #45a049; }
+        .btn-claim:disabled { background: #444; color: #888; cursor: not-allowed; }
+        .btn-danger { display: block; width: 100%; background: #cc0000; color: white; padding: 12px 20px; border: 2px solid #ff4444; border-radius: 8px; cursor: pointer; margin-bottom: 15px; font-weight: bold; font-size: 16px; }
+        .btn-danger:hover { background: #ff0000; }
+        .btn-close { display: block; width: 100%; background: #444; color: #aaa; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; transition: 0.2s; margin-top: 10px; }
+        
+        .btn-skill { background: #9c27b0; color: white; padding: 8px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; width: 100%; margin-top: 5px;}
+    </style>
+</head>
+<body>
+
+    <div id="header">
+        <h1 id="titleText">$<span id="moneyText">0</span></h1>
+        <span id="multiplierText">Multiplier: x1</span>
+        <span id="shardText">💎 <span id="shardCount">0</span> Shards</span>
+        <p>Tap to drop!</p>
+    </div>
+    
+    <div id="saveIndicator">Cloud Saved...</div>
+    
+    <button id="btnSettings" class="top-btn" onpointerdown="openSettings()">⚙️</button>
+    <button id="btnMissions" class="top-btn" onpointerdown="openMissions()">📋</button>
+    <button id="btnSkills" class="top-btn" onpointerdown="openSkills()">🧬</button>
+    <button id="btnPrestige" onpointerdown="doPrestige()">✨ PRESTIGE ($1M)</button>
+
+    <div id="shop">
+        <button id="btnAuto" class="upgrade-btn" onpointerdown="buyUpgrade('auto')">
+            <span class="btn-title">🤖 Auto-Drop</span>
+            <span class="btn-cost" id="costAuto">$100</span><span class="btn-level" id="lvlAuto">Lvl 0</span>
+        </button>
+        <button id="btnMult" class="upgrade-btn" onpointerdown="buyUpgrade('mult')">
+            <span class="btn-title">💎 Ball Value</span>
+            <span class="btn-cost" id="costMult">$250</span><span class="btn-level" id="lvlMult">Lvl 1</span>
+        </button>
+        <button id="btnBounce" class="upgrade-btn" onpointerdown="buyUpgrade('bounce')">
+            <span class="btn-title">🏀 Bounciness</span>
+            <span class="btn-cost" id="costBounce">$500</span><span class="btn-level" id="lvlBounce">Lvl 0</span>
+        </button>
+    </div>
+
+    <div id="modalOverlay" class="modal-overlay">
+        <div class="modal-box">
+            <h2 id="modalTitle">Reward</h2>
+            <p id="modalDesc">Details here.</p>
+            <button id="btnModalAd" class="btn-ad">Watch Ad</button>
+            <button id="btnModalClaim" class="btn-close">No Thanks</button>
+        </div>
+    </div>
+
+    <div id="settingsOverlay" class="modal-overlay">
+        <div class="modal-box" style="border-color: #888;">
+            <h2 style="color: #fff;">⚙️ Settings</h2>
+            <button id="btnMuteToggle" class="btn-close" onpointerdown="toggleMute()" style="font-size: 16px; padding: 15px; color: white; margin-bottom: 15px;">🔊 Audio: ON</button>
+            <button class="btn-danger" onpointerdown="hardReset()">⚠️ WIPE SAVE DATA</button>
+            <button class="btn-close" onpointerdown="closeModals()">Close</button>
+        </div>
+    </div>
+
+    <div id="missionsOverlay" class="modal-overlay">
+        <div class="modal-box" style="border-color: #4caf50;">
+            <h2 style="color: #4caf50;">📋 Missions</h2>
+            <div id="missionList"></div>
+            <button class="btn-close" onpointerdown="closeModals()">Close</button>
+        </div>
+    </div>
+
+    <div id="skillsOverlay" class="modal-overlay">
+        <div class="modal-box" style="border-color: #9c27b0;">
+            <h2 style="color: #e040fb;">🧬 Meta-Skills</h2>
+            <p style="color: #e040fb; font-weight: bold; margin-top: -15px;">💎 <span id="modalShardCount">0</span> Shards</p>
+            <div id="skillList"></div>
+            <button class="btn-close" onpointerdown="closeModals()">Close</button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    // --- TELEGRAM & ADSGRAM INTEGRATION ---
+    const tg = window.Telegram.WebApp;
+    tg.expand(); // Fullscreen
+    tg.enableClosingConfirmation(); // Don't close accidental swaps
+
+    // Replace YOUR_BLOCK_ID with your actual ID from Adsgram.ai
+    const AdController = window.Adsgram ? window.Adsgram.init({ blockId: "YOUR_BLOCK_ID" }) : null;
+
+    const AdManager = {
+        isAdPlaying: false,
+        showRewardedVideo: async function(rewardName, onSuccess, onFail) {
+            if (!AdController) {
+                // Fallback for testing outside Telegram
+                if(confirm(`[DEV MODE] Watch ad for ${rewardName}?`)) onSuccess(); else if(onFail) onFail();
+                return;
+            }
+            this.isAdPlaying = true;
+            if(audioCtx) audioCtx.suspend(); 
+            
+            try {
+                const result = await AdController.show();
+                if (result.done) onSuccess(); else if(onFail) onFail();
+            } catch (e) {
+                console.error("Ad failed", e);
+                if(onFail) onFail();
+            }
+            
+            this.isAdPlaying = false;
+            if(!isAudioMuted && audioCtx) audioCtx.resume();
+        },
+        showInterstitial: async function(onClose) {
+            // Interstitials usually use a different blockId, but we'll use the same for simplicity
+            await this.showRewardedVideo("Interstitial", onClose, onClose);
+        }
+    };
+
+    const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
+    const moneyText = document.getElementById('moneyText'); const btnPrestige = document.getElementById('btnPrestige');
+    const titleText = document.getElementById('titleText'); const multiplierText = document.getElementById('multiplierText');
+    const saveIndicator = document.getElementById('saveIndicator'); const btnMissions = document.getElementById('btnMissions');
+    const btnSkills = document.getElementById('btnSkills'); const shardText = document.getElementById('shardText');
+    const shardCountUI = document.getElementById('shardCount'); const modalShardCount = document.getElementById('modalShardCount');
+    
+    const modalOverlay = document.getElementById('modalOverlay'); const settingsOverlay = document.getElementById('settingsOverlay');
+    const missionsOverlay = document.getElementById('missionsOverlay'); const missionList = document.getElementById('missionList');
+    const skillsOverlay = document.getElementById('skillsOverlay'); const skillList = document.getElementById('skillList');
+    const btnMuteToggle = document.getElementById('btnMuteToggle'); const modalTitle = document.getElementById('modalTitle');
+    const modalDesc = document.getElementById('modalDesc'); const btnModalAd = document.getElementById('btnModalAd');
+    const btnModalClaim = document.getElementById('btnModalClaim');
+
+    let width, height; let isGamePaused = false; let isAudioMuted = false;
+
+    // Economy & Stats
+    let prestigeLevel = 0; const PRESTIGE_COST = 1000000; 
+    const themes = [
+        { name: "Classic", bg: "#111", trail: "rgba(17, 17, 17, 0.35)", pegOff: "#444", textMain: "#ffeb3b" },
+        { name: "Cyberpunk", bg: "#050510", trail: "rgba(5, 5, 16, 0.35)", pegOff: "#0b3d60", textMain: "#00ffff" },
+        { name: "Inferno", bg: "#1a0000", trail: "rgba(26, 0, 0, 0.35)", pegOff: "#4a1500", textMain: "#ff5722" },
+        { name: "Radiant", bg: "#101510", trail: "rgba(16, 21, 16, 0.35)", pegOff: "#1b4d22", textMain: "#55ff55" }
+    ];
+    let currentTheme = themes[0]; let money = 0; let prestigeMultiplier = 1;
+
+    let neonShards = 0;
+    const metaSkills = {
+        maxBalls: { level: 0, max: 10, cost: 1, name: "Max Balls Capacity (+5)", desc: "Increases screen cap." },
+        feverTime: { level: 0, max: 10, cost: 1, name: "Extended Climax (+1s)", desc: "Fever Mode lasts longer." },
+        mutationRate: { level: 0, max: 10, cost: 2, name: "Mutation Mastery (+1%)", desc: "More Special Pegs spawn." }
+    };
+
+    const upgrades = {
+        auto: { level: 0, baseCost: 100, costMult: 2.5, elCost: document.getElementById('costAuto'), elLvl: document.getElementById('lvlAuto'), btn: document.getElementById('btnAuto') },
+        mult: { level: 1, baseCost: 250, costMult: 2.0, elCost: document.getElementById('costMult'), elLvl: document.getElementById('lvlMult'), btn: document.getElementById('btnMult') },
+        bounce: { level: 0, baseCost: 500, costMult: 3.0, elCost: document.getElementById('costBounce'), elLvl: document.getElementById('lvlBounce'), btn: document.getElementById('btnBounce') }
+    };
+
+    let baseHitValue = 1; let bounceFactor = 0.5; let lastAutoDropTime = 0; let shakeAmount = 0;
+    let feverCharge = 0; const MAX_FEVER = 1500; let feverActive = false; let feverFramesLeft = 0; let feverCooldown = 0; 
+    let goblin = { active: false, x: 0, y: 0, r: 25, time: 0, dir: 1 }; let lastGoblinSpawnTime = Date.now();
+
+    function getMaxBalls() { return 40 + (metaSkills.maxBalls.level * 5); }
+    function getFeverDuration() { return 600 + (metaSkills.feverTime.level * 60); }
+    function getMutationRate() { return 0.015 + (metaSkills.mutationRate.level * 0.01); }
+
+    const SAVE_KEY = 'asmrPachinkoCloudSave';
+
+    let stats = { ballsDropped: 0, goldHit: 0, portalsHit: 0, feversTriggered: 0 };
+    let activeMissions = []; let missionsCompleted = 0;
+    const missionTypes = [
+        { type: 'balls', desc: "Drop balls", baseTarget: 50 }, { type: 'gold', desc: "Hit Gold Pegs", baseTarget: 5 },
+        { type: 'portals', desc: "Enter Portals", baseTarget: 3 }, { type: 'fever', desc: "Trigger Fever Mode", baseTarget: 1 }
+    ];
+
+    function generateMission() {
+        let difficultyMult = 1 + (missionsCompleted * 0.1); 
+        let template = missionTypes[Math.floor(Math.random() * missionTypes.length)];
+        let target = Math.ceil(template.baseTarget * difficultyMult);
+        let startProgress = stats[template.type === 'gold' ? 'goldHit' : (template.type === 'portals' ? 'portalsHit' : (template.type === 'fever' ? 'feversTriggered' : 'ballsDropped'))];
+        return { id: Math.random().toString(36).substr(2, 9), type: template.type, desc: `${template.desc} (${target})`, target: startProgress + target, rewardBase: 500 * difficultyMult };
+    }
+
+    function initMissions() { if (activeMissions.length === 0) for(let i=0; i<3; i++) activeMissions.push(generateMission()); }
+
+    function checkMissions() {
+        let ready = false;
+        activeMissions.forEach(m => {
+            let current = stats[m.type === 'gold' ? 'goldHit' : (m.type === 'portals' ? 'portalsHit' : (m.type === 'fever' ? 'feversTriggered' : 'ballsDropped'))];
+            if (current >= m.target) ready = true;
+        });
+        if (ready) btnMissions.classList.add('notify-pulse'); else btnMissions.classList.remove('notify-pulse');
+    }
+
+    function renderMissions() {
+        missionList.innerHTML = '';
+        activeMissions.forEach((m, index) => {
+            let current = stats[m.type === 'gold' ? 'goldHit' : (m.type === 'portals' ? 'portalsHit' : (m.type === 'fever' ? 'feversTriggered' : 'ballsDropped'))];
+            let progress = Math.min(100, (current / m.target) * 100); let isComplete = current >= m.target;
+            let rewardAmount = m.rewardBase * prestigeMultiplier * baseHitValue;
+            missionList.innerHTML += `<div class="list-item"><div class="list-desc">${m.desc} - Reward: $${formatMoney(rewardAmount)}</div><div class="mission-progress"><div class="mission-fill" style="width: ${progress}%;"></div></div><button class="btn-claim" ${isComplete ? '' : 'disabled'} onpointerdown="claimMission(${index}, ${rewardAmount})">${isComplete ? 'Claim Reward' : Math.floor(progress) + '%'}</button></div>`;
+        });
+    }
+
+    window.claimMission = function(index, reward) {
+        money += reward; floatingTexts.push(new FloatingText(width/2, height/2, `MISSION COMPLETE! +$${formatMoney(reward)}`, '#0f0', 24));
+        spawnParticles(width/2, height/2, '#0f0', 30); missionsCompleted++;
+        activeMissions[index] = generateMission(); renderMissions(); updateUI(); saveGame(); checkMissions();
+    };
+
+    function renderSkills() {
+        skillList.innerHTML = ''; modalShardCount.innerText = neonShards;
+        for (let key in metaSkills) {
+            let s = metaSkills[key]; let isMaxed = s.level >= s.max; let canAfford = neonShards >= s.cost && !isMaxed;
+            skillList.innerHTML += `<div class="list-item"><div class="list-desc" style="color: #e040fb; font-weight: bold;">${s.name} (Lvl ${s.level}/${s.max})</div><div style="font-size: 12px; color: #aaa; margin-bottom: 5px;">${s.desc}</div><button class="btn-skill" ${canAfford ? '' : 'disabled'} onpointerdown="buySkill('${key}')">${isMaxed ? 'MAXED' : 'Upgrade: 💎 ' + s.cost}</button></div>`;
+        }
+    }
+
+    window.buySkill = function(key) {
+        let s = metaSkills[key];
+        if (neonShards >= s.cost && s.level < s.max) {
+            neonShards -= s.cost; s.level++; renderSkills(); updateUI(); saveGame();
+        }
+    }
+
+    function formatMoney(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+        return Math.floor(num).toString();
+    }
+
+    function updateUI() {
+        let moneyStr = formatMoney(money);
+        if (moneyText.innerText !== moneyStr) moneyText.innerText = moneyStr;
+
+        for (let key in upgrades) {
+            let u = upgrades[key]; 
+            let currentCost = Math.floor(u.baseCost * Math.pow(u.costMult, u.level - (key === 'mult' ? 1 : 0)));
+            let costStr = "$" + formatMoney(currentCost);
+            let lvlStr = "Lvl " + u.level;
+            
+            if (key === 'bounce' && u.level >= 4) { 
+                if (u.elCost.innerText !== "MAX") u.elCost.innerText = "MAX";
+                if (u.elLvl.innerText !== lvlStr) u.elLvl.innerText = lvlStr;
+                if (!u.btn.disabled) u.btn.disabled = true;
+            } else { 
+                if (u.elCost.innerText !== costStr) u.elCost.innerText = costStr;
+                if (u.elLvl.innerText !== lvlStr) u.elLvl.innerText = lvlStr;
+                u.btn.disabled = money < currentCost;
+            }
+        }
+        
+        btnPrestige.style.display = money >= PRESTIGE_COST ? 'block' : 'none';
+        
+        if (prestigeLevel > 0 || neonShards > 0) {
+            btnSkills.style.display = 'block';
+            shardText.style.display = 'block';
+            shardCountUI.innerText = neonShards;
+        }
+    }
+
+    // --- TELEGRAM CLOUD STORAGE SAVE ---
+    function saveGame() {
+        const saveData = {
+            money: money, prestigeLevel: prestigeLevel, neonShards: neonShards, lastSaveTime: Date.now(), isMuted: isAudioMuted,
+            upgrades: { auto: upgrades.auto.level, mult: upgrades.mult.level, bounce: upgrades.bounce.level },
+            metaSkills: { maxBalls: metaSkills.maxBalls.level, feverTime: metaSkills.feverTime.level, mutationRate: metaSkills.mutationRate.level },
+            stats: stats, activeMissions: activeMissions, missionsCompleted: missionsCompleted
+        };
+        const dataStr = JSON.stringify(saveData);
+        
+        // Telegram Cloud Storage limit is 1024 chars per key. If game grows, split into keys.
+        tg.CloudStorage.setItem(SAVE_KEY, dataStr, (err, success) => {
+            if (success) {
+                saveIndicator.style.opacity = 1; 
+                setTimeout(() => { saveIndicator.style.opacity = 0; }, 1000);
+            }
+        });
+    }
+
+    function loadGame() {
+        tg.CloudStorage.getItem(SAVE_KEY, (err, savedString) => {
+            if (savedString) {
+                try {
+                    const saved = JSON.parse(savedString);
+                    money = saved.money || 0; prestigeLevel = saved.prestigeLevel || 0; neonShards = saved.neonShards || 0;
+                    isAudioMuted = saved.isMuted || false; btnMuteToggle.innerText = isAudioMuted ? "🔇 Audio: OFF" : "🔊 Audio: ON";
+                    if (saved.upgrades) { upgrades.auto.level = saved.upgrades.auto || 0; upgrades.mult.level = saved.upgrades.mult || 1; upgrades.bounce.level = saved.upgrades.bounce || 0; }
+                    if (saved.metaSkills) { metaSkills.maxBalls.level = saved.metaSkills.maxBalls || 0; metaSkills.feverTime.level = saved.metaSkills.feverTime || 0; metaSkills.mutationRate.level = saved.metaSkills.mutationRate || 0; }
+                    
+                    stats = saved.stats || { ballsDropped: 0, goldHit: 0, portalsHit: 0, feversTriggered: 0 };
+                    activeMissions = saved.activeMissions || []; missionsCompleted = saved.missionsCompleted || 0;
+
+                    prestigeMultiplier = 1 + (prestigeLevel * 2); baseHitValue = upgrades.mult.level; bounceFactor = Math.min(0.8, 0.5 + (upgrades.bounce.level * 0.075));
+                    currentTheme = themes[prestigeLevel % themes.length];
+                    document.body.style.backgroundColor = currentTheme.bg; titleText.style.color = currentTheme.textMain;
+                    multiplierText.innerText = `Multiplier: x${prestigeMultiplier} (${currentTheme.name})`;
+
+                    if (saved.lastSaveTime && upgrades.auto.level > 0) {
+                        let secondsAway = Math.floor((Date.now() - saved.lastSaveTime) / 1000);
+                        if (secondsAway > 60) { 
+                            let effectiveSeconds = Math.min(secondsAway, 43200); 
+                            let dropsPerSec = 1000 / Math.max(250, 3000 - (upgrades.auto.level * 300));
+                            let estimatedEarnings = effectiveSeconds * dropsPerSec * (baseHitValue * 5 * prestigeMultiplier);
+                            showOfflineEarningsModal(estimatedEarnings);
+                        }
+                    }
+                } catch (e) { console.error("Corrupted save", e); }
+            }
+            initMissions(); checkMissions(); updateUI();
+        });
+    }
+
+    setInterval(saveGame, 10000);
+
+    function openSettings() { isGamePaused = true; settingsOverlay.style.display = 'flex'; }
+    function openMissions() { renderMissions(); isGamePaused = true; missionsOverlay.style.display = 'flex'; }
+    function openSkills() { renderSkills(); isGamePaused = true; skillsOverlay.style.display = 'flex'; }
+    window.closeModals = function() { 
+        settingsOverlay.style.display = 'none'; missionsOverlay.style.display = 'none'; skillsOverlay.style.display = 'none'; modalOverlay.style.display = 'none'; 
+        isGamePaused = false; saveGame(); checkMissions();
+    }
+    
+    window.toggleMute = function() { isAudioMuted = !isAudioMuted; btnMuteToggle.innerText = isAudioMuted ? "🔇 Audio: OFF" : "🔊 Audio: ON"; if (isAudioMuted && audioCtx) audioCtx.suspend(); else if (!isAudioMuted && audioCtx) audioCtx.resume(); }
+    window.hardReset = function() { if (confirm("⚠️ WARNING: DELETE ALL SAVE DATA?")) { tg.CloudStorage.removeItem(SAVE_KEY, () => { location.reload(); }); } }
+
+    function showOfflineEarningsModal(amount) {
+        isGamePaused = true; modalOverlay.style.display = 'flex'; modalTitle.innerText = "Welcome Back!";
+        modalDesc.innerText = `Auto-droppers earned $${formatMoney(amount)} while away.`;
+        btnModalAd.innerText = `Watch Ad for 3x ($${formatMoney(amount * 3)})`; btnModalClaim.innerText = `Claim Normal ($${formatMoney(amount)})`;
+        btnModalAd.onpointerdown = () => { AdManager.showRewardedVideo("3x Offline Earnings", () => { money += (amount * 3); updateUI(); saveGame(); closeModals(); }, () => { closeModals(); }); };
+        btnModalClaim.onpointerdown = () => { money += amount; updateUI(); saveGame(); closeModals(); };
+    }
+
+    function showGoblinModal() {
+        isGamePaused = true; modalOverlay.style.display = 'flex'; modalTitle.innerText = "Loot Goblin Caught!";
+        let goblinBounty = 500 * prestigeMultiplier * baseHitValue; modalDesc.innerText = `The goblin drops $${formatMoney(goblinBounty)}. Watch an ad to steal his magic and trigger INSTANT FEVER MODE!`;
+        btnModalAd.innerText = `Watch Ad for FEVER + $${formatMoney(goblinBounty)}`; btnModalClaim.innerText = `Just take $${formatMoney(goblinBounty)}`;
+        btnModalAd.onpointerdown = () => { AdManager.showRewardedVideo("Goblin Fever", () => { money += goblinBounty; stats.feversTriggered++; checkMissions(); feverActive = true; feverFramesLeft = getFeverDuration(); feverCharge = MAX_FEVER; shakeAmount = 30; playFeverChord(); updateUI(); closeModals(); }, () => { closeModals(); }); };
+        btnModalClaim.onpointerdown = () => { money += goblinBounty; updateUI(); closeModals(); };
+    }
+
+    window.doPrestige = function() {
+        if (money >= PRESTIGE_COST) {
+            AdManager.showInterstitial(() => {
+                let earnedShards = prestigeLevel + 1; 
+                neonShards += earnedShards;
+                floatingTexts.push(new FloatingText(width/2, height/2, `PRESTIGE! +💎${earnedShards} Shards`, '#e040fb', 30));
+                
+                money = 0; prestigeLevel++; prestigeMultiplier = 1 + (prestigeLevel * 2);
+                upgrades.auto.level = 0; upgrades.mult.level = 1; upgrades.bounce.level = 0;
+                baseHitValue = 1; bounceFactor = 0.5; balls = []; particles = []; 
+                feverCharge = 0; feverActive = false; feverCooldown = 0; initBoard();
+                currentTheme = themes[prestigeLevel % themes.length];
+                document.body.style.backgroundColor = currentTheme.bg; titleText.style.color = currentTheme.textMain;
+                multiplierText.innerText = `Multiplier: x${prestigeMultiplier} (${currentTheme.name})`;
+                updateUI(); saveGame();
+            });
+        }
+    }
+
+    window.buyUpgrade = function(type) {
+        let u = upgrades[type]; let currentCost = Math.floor(u.baseCost * Math.pow(u.costMult, u.level - (type === 'mult' ? 1 : 0)));
+        if (money >= currentCost) {
+            money -= currentCost; u.level++;
+            if (type === 'mult') baseHitValue = u.level;
+            else if (type === 'bounce') bounceFactor = Math.min(0.8, 0.5 + (u.level * 0.075)); 
+            updateUI(); saveGame();
+        }
+    };
+
+    let audioCtx = null; const scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25]; let lastNoteTime = 0;
+    function playFeverChord() { if (isAudioMuted || !audioCtx || audioCtx.state !== 'running') return; [261.63, 329.63, 392.00, 523.25].forEach(freq => { const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime); gainNode.gain.setValueAtTime(0, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.05, audioCtx.currentTime + 0.1); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2); osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 2); }); }
+    function playNote(pegY, isSpecial = false) { if (isAudioMuted || !audioCtx || audioCtx.state !== 'running' || audioCtx.currentTime - lastNoteTime < 0.05) return; lastNoteTime = audioCtx.currentTime; const noteIndex = Math.floor((1 - (pegY / height)) * (scale.length - 1)); const freq = scale[Math.max(0, Math.min(noteIndex, scale.length - 1))] * (isSpecial ? 2 : 1) * (feverActive ? 1.5 : 1); const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain(); osc.type = isSpecial || feverActive ? 'triangle' : 'sine'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime); gainNode.gain.setValueAtTime(0, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(isSpecial || feverActive ? 0.08 : 0.06, audioCtx.currentTime + 0.05); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1); osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 1); }
+
+    let balls = [], pegs = [], buckets = [], particles = [], floatingTexts = [];
+    const gravity = 0.2; const shopHeight = 100; const paddle = { x: 0, y: 0, width: 60, height: 10, vx: 4 };
+
+    class FloatingText { constructor(x, y, text, color, size = 16) { this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.vy = -1.5; this.size = size; } update() { this.y += this.vy; this.life -= 0.02; } draw() { ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.font = `bold ${this.size}px sans-serif`; ctx.textAlign = "center"; ctx.fillText(this.text, this.x, this.y); ctx.globalAlpha = 1.0; } }
+    class Particle { constructor(x, y, color) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 6; this.vy = (Math.random() - 0.5) * 6; this.life = 1.0; this.decay = Math.random() * 0.05 + 0.02; this.color = color; this.size = Math.random() * 3 + 1; } update() { this.x += this.vx; this.y += this.vy; this.life -= this.decay; } draw() { ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1.0; } }
+    class Ball { constructor(x, y) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 2; this.vy = feverActive ? 5 : 2; this.r = Math.min(width, height) * 0.015; this.color = `hsl(${Math.random() * 360}, 100%, 70%)`; this.combo = 0; } update() { this.vy += gravity; this.x += this.vx; this.y += this.vy; if (this.x - this.r < 0) { this.x = this.r; this.vx *= -bounceFactor; } if (this.x + this.r > width) { this.x = width - this.r; this.vx *= -bounceFactor; } } draw() { if (this.combo > 5 || feverActive) { ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 4, 0, Math.PI * 2); ctx.fillStyle = feverActive ? `hsla(${Math.random()*360}, 100%, 50%, 0.5)` : "rgba(255, 255, 255, 0.5)"; ctx.fill(); ctx.closePath(); } ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fillStyle = this.combo > 5 || feverActive ? '#fff' : this.color; ctx.fill(); ctx.closePath(); } }
+
+    function initBoard() {
+        pegs = []; buckets = []; const rows = 10; const cols = 8; const spacingX = width / cols; const boardHeight = height - shopHeight - 80; const spacingY = boardHeight * 0.8 / rows; const startY = height * 0.2;
+        paddle.y = height * 0.12; paddle.x = width / 2; paddle.width = Math.max(40, width * 0.1);
+        for (let r = 0; r < rows; r++) { const offset = (r % 2 === 0) ? spacingX / 2 : 0; for (let c = 0; c < cols; c++) { pegs.push({ x: c * spacingX + offset + spacingX / 2, y: startY + r * spacingY, radius: Math.min(width, height) * 0.012, flashTimer: 0, type: 0, pulse: Math.random() * Math.PI * 2 }); } }
+        const bucketMultipliers = [1, 3, 5, 3, 1]; const bucketWidth = width / 5; const bucketY = height - shopHeight - 40;
+        for (let i = 0; i < 5; i++) { buckets.push({ x: i * bucketWidth, y: bucketY, w: bucketWidth, h: 40, mult: bucketMultipliers[i], color: bucketMultipliers[i] === 5 ? '#ffeb3b' : (bucketMultipliers[i] === 3 ? '#4fc3f7' : '#888'), flashTimer: 0 }); }
+    }
+
+    function resizeCanvas() { width = window.innerWidth; height = window.innerHeight; canvas.width = width; canvas.height = height; initBoard(); }
+    window.addEventListener('resize', resizeCanvas);
+    function spawnParticles(x, y, color, count) { for(let i=0; i<count; i++) particles.push(new Particle(x, y, color)); }
+
+    function drawFeverBar() {
+        const barWidth = Math.min(300, width * 0.6); const barX = (width - barWidth) / 2; const barY = 20;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; ctx.fillRect(barX, barY, barWidth, 15);
+        const fillPercent = feverActive ? (feverFramesLeft / getFeverDuration()) : (feverCharge / MAX_FEVER);
+        ctx.fillStyle = feverCooldown > 0 ? "#555" : (feverActive ? `hsl(${Date.now() % 360}, 100%, 50%)` : "#ff007f"); ctx.fillRect(barX, barY, barWidth * fillPercent, 15);
+        ctx.strokeStyle = feverActive ? "#fff" : "#444"; ctx.lineWidth = 2; ctx.strokeRect(barX, barY, barWidth, 15);
+    }
+
+    function resolveCollisions() {
+        for (let i = balls.length - 1; i >= 0; i--) {
+            let b = balls[i];
+            for (let j = 0; j < pegs.length; j++) {
+                let p = pegs[j]; let dx = b.x - p.x; let dy = b.y - p.y;
+                let distance = Math.sqrt(dx * dx + dy * dy); let minDist = b.r + p.radius;
+                if (distance < minDist) {
+                    let overlap = minDist - distance; if (distance === 0) { dx = 1; dy = 1; distance = 1.414; } 
+                    let nx = dx / distance; let ny = dy / distance; b.x += nx * overlap; b.y += ny * overlap;
+
+                    // --- TELEGRAM HAPTICS ON COLLISION ---
+                    if (p.type > 0) tg.HapticFeedback.impactOccurred('medium');
+                    else tg.HapticFeedback.impactOccurred('light');
+
+                    let pType = p.type;
+                    if (pType === 2) { b.vy = -12; b.vx = (Math.random() - 0.5) * 15; shakeAmount = 25; spawnParticles(p.x, p.y, '#ff3300', 20); p.type = 0; } 
+                    else if (pType === 3) { spawnParticles(p.x, p.y, '#aa00ff', 15); b.x = paddle.x; b.y = paddle.y + 20; b.vy = 2; b.vx = (Math.random() - 0.5) * 4; p.type = 0; stats.portalsHit++; checkMissions(); } 
+                    else { let dotProduct = (b.vx * nx) + (b.vy * ny); b.vx = (b.vx - 2 * dotProduct * nx) * bounceFactor; b.vy = (b.vy - 2 * dotProduct * ny) * bounceFactor; }
+
+                    b.combo++; let feverMultiplier = feverActive ? 3 : 1; let comboMultiplier = Math.min(5, 1 + Math.floor(b.combo / 5)); 
+                    p.flashTimer = 15; playNote(p.y, b.combo > 5 || pType > 0);
+                    let earned = (baseHitValue * 0.1 * prestigeMultiplier * comboMultiplier * feverMultiplier);
+                    if (pType === 1) { earned *= 10; p.type = 0; stats.goldHit++; checkMissions(); } money += earned;
+                    floatingTexts.push(new FloatingText(p.x, p.y - 10, `+${earned.toFixed(1)}`, pType === 1 ? '#ffd700' : b.color));
+                    if (pType === 0 && Math.random() < getMutationRate()) p.type = Math.floor(Math.random() * 3) + 1; 
+                }
+            }
+
+            if (b.y > height - shopHeight - 40) {
+                let bucketIndex = Math.floor(b.x / (width / 5));
+                if (bucketIndex >= 0 && bucketIndex < 5) {
+                    tg.HapticFeedback.notificationOccurred('success');
+                    let bk = buckets[bucketIndex]; let feverMultiplier = feverActive ? 3 : 1; let comboMultiplier = Math.min(5, 1 + Math.floor(b.combo / 5)); 
+                    let earned = (baseHitValue * 10 * bk.mult * prestigeMultiplier * comboMultiplier * feverMultiplier);
+                    money += earned; bk.flashTimer = 20;
+                    floatingTexts.push(new FloatingText(b.x, b.y - 20, `+$${Math.floor(earned)}`, bk.color, 28));
+                    spawnParticles(b.x, b.y, bk.color, 20);
+                    if (!feverActive && feverCooldown <= 0) {
+                        feverCharge += (bk.mult * 10);
+                        if (feverCharge >= MAX_FEVER) { feverActive = true; feverFramesLeft = getFeverDuration(); feverCharge = MAX_FEVER; stats.feversTriggered++; checkMissions(); playFeverChord(); }
+                    }
+                }
+                balls.splice(i, 1); updateUI();
+            }
+        }
+    }
+
+    function gameLoop(timestamp) {
+        if (AdManager.isAdPlaying || isGamePaused) { requestAnimationFrame(gameLoop); return; }
+        ctx.fillStyle = feverActive ? `rgba(${Math.random()*40}, ${Math.random()*20}, ${Math.random()*40}, 0.35)` : currentTheme.trail;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.save();
+        if (shakeAmount > 0.5) { let dx = (Math.random() - 0.5) * shakeAmount; let dy = (Math.random() - 0.5) * shakeAmount; ctx.translate(dx, dy); shakeAmount *= 0.9; }
+
+        if (feverActive) { feverFramesLeft--; if (feverFramesLeft <= 0) { feverActive = false; feverCharge = 0; feverCooldown = 240; } }
+        if (feverCooldown > 0) feverCooldown--;
+
+        paddle.x += feverActive ? (paddle.vx > 0 ? 12 : -12) : (paddle.vx > 0 ? 4 : -4); 
+        if (paddle.x - paddle.width/2 < 0 || paddle.x + paddle.width/2 > width) paddle.vx *= -1;
+        
+        ctx.fillStyle = '#fff'; ctx.fillRect(paddle.x - paddle.width/2, paddle.y - paddle.height/2, paddle.width, paddle.height);
+
+        let currentMaxBalls = feverActive ? getMaxBalls() * 2 : getMaxBalls();
+        if (feverActive && balls.length < currentMaxBalls) {
+            if (timestamp - lastAutoDropTime > 80) { balls.push(new Ball(paddle.x, paddle.y + 10)); stats.ballsDropped++; lastAutoDropTime = timestamp; }
+        } else if (upgrades.auto.level > 0 && balls.length < currentMaxBalls) {
+            let dropInterval = Math.max(250, 3000 - (upgrades.auto.level * 300));
+            if (timestamp - lastAutoDropTime > dropInterval) { balls.push(new Ball(paddle.x, paddle.y + 10)); stats.ballsDropped++; lastAutoDropTime = timestamp; }
+        }
+
+        for (let bk of buckets) {
+            ctx.fillStyle = bk.flashTimer > 0 ? '#fff' : currentTheme.bg; ctx.fillRect(bk.x, bk.y, bk.w, bk.h);
+            ctx.strokeStyle = bk.color; ctx.strokeRect(bk.x, bk.y, bk.w, bk.h);
+            if (bk.flashTimer > 0) bk.flashTimer--;
+        }
+
+        for (let p of pegs) {
+            p.pulse += 0.1; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            if (p.flashTimer > 0) ctx.fillStyle = '#fff';
+            else if (p.type === 1) ctx.fillStyle = '#ffd700'; 
+            else if (p.type === 2) ctx.fillStyle = '#ff3300';
+            else if (p.type === 3) ctx.fillStyle = '#aa00ff';
+            else ctx.fillStyle = currentTheme.pegOff;
+            ctx.fill(); ctx.closePath();
+            if (p.flashTimer > 0) p.flashTimer--;
+        }
+
+        if (!goblin.active && !feverActive && Date.now() - lastGoblinSpawnTime > 60000) { if (Math.random() < 0.005) spawnGoblin(); }
+        if (goblin.active) {
+            goblin.time += 0.05; goblin.x += goblin.dir * 3; goblin.y = height * 0.4 + Math.sin(goblin.time) * 80; 
+            ctx.font = "40px sans-serif"; ctx.fillText("👽", goblin.x, goblin.y);
+            if (goblin.x < -100 || goblin.x > width + 100) { goblin.active = false; lastGoblinSpawnTime = Date.now(); }
+        }
+        
+        for (let b of balls) { b.update(); b.draw(); }
+        for (let i = particles.length - 1; i >= 0; i--) { particles[i].update(); particles[i].draw(); if (particles[i].life <= 0) particles.splice(i, 1); }
+        for (let i = floatingTexts.length - 1; i >= 0; i--) { floatingTexts[i].update(); floatingTexts[i].draw(); if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1); }
+
+        resolveCollisions(); ctx.restore(); drawFeverBar(); updateUI(); requestAnimationFrame(gameLoop);
+    }
+
+    function spawnGoblin() { goblin.active = true; goblin.x = -50; goblin.dir = 1; }
+
+    function triggerDrop() {
+        if (isGamePaused || AdManager.isAdPlaying) return;
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (!isAudioMuted && audioCtx.state === 'suspended') audioCtx.resume();
+        let currentMaxBalls = feverActive ? getMaxBalls() * 2 : getMaxBalls();
+        if (balls.length < currentMaxBalls) { balls.push(new Ball(paddle.x, paddle.y + 10)); stats.ballsDropped++; checkMissions(); }
+    }
+
+    window.addEventListener('pointerdown', (e) => { 
+        if (e.target.closest('button') || isGamePaused) return; 
+        if (goblin.active) { 
+            let dx = e.clientX - goblin.x; let dy = e.clientY - goblin.y; 
+            if (Math.sqrt(dx*dx + dy*dy) < goblin.r + 20) { 
+                tg.HapticFeedback.notificationOccurred('warning');
+                goblin.active = false; showGoblinModal(); return; 
+            } 
+        }
+        if (e.clientY < height - shopHeight) triggerDrop(); 
+    });
+
+    loadGame(); resizeCanvas(); requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
