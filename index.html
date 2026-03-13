@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ASMR Pachinko Idle - Telegram Pro</title>
+    <title>ASMR Pachinko Idle - Telegram Edition</title>
+    
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://sad.adsgram.ai/js/adsgram-ad-sdk.js"></script>
+    <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+
     <style>
         body {
             margin: 0; padding: 0; background-color: #111; overflow: hidden;
@@ -25,6 +27,7 @@
             opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 15;
         }
 
+        /* Top Right Buttons */
         .top-btn {
             position: absolute; top: 15px; z-index: 20;
             background: transparent; border: none; font-size: 24px; cursor: pointer;
@@ -57,12 +60,14 @@
             color: white; font-weight: bold; text-align: center; cursor: pointer; transition: 0.2s;
         }
         .upgrade-btn:disabled { opacity: 0.4; border-color: #111; cursor: not-allowed; }
+        .upgrade-btn:not(:disabled):active { transform: scale(0.95); background: #333; }
         .btn-title { display: block; font-size: 13px; margin-bottom: 2px; color: #4fc3f7; }
         .btn-cost { display: block; font-size: 16px; color: #ffeb3b; }
         .btn-level { display: block; font-size: 11px; color: #888; margin-top: 3px; }
 
         .upgrade-btn *, .top-btn *, .btn-skill * { pointer-events: none; }
 
+        /* --- MODAL UI --- */
         .modal-overlay {
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); z-index: 100; justify-content: center; align-items: center; flex-direction: column;
@@ -81,10 +86,16 @@
         
         .btn-ad { display: block; width: 100%; background: linear-gradient(45deg, #ff007f, #7f00ff); color: white; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 15px; font-weight: bold; font-size: 16px; animation: pulse 1.5s infinite alternate; }
         .btn-claim { display: block; width: 100%; background: #4caf50; color: white; padding: 8px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; transition: 0.2s; }
+        .btn-claim:hover { background: #45a049; }
+        .btn-claim:disabled { background: #444; color: #888; cursor: not-allowed; }
         .btn-danger { display: block; width: 100%; background: #cc0000; color: white; padding: 12px 20px; border: 2px solid #ff4444; border-radius: 8px; cursor: pointer; margin-bottom: 15px; font-weight: bold; font-size: 16px; }
+        .btn-danger:hover { background: #ff0000; }
         .btn-close { display: block; width: 100%; background: #444; color: #aaa; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; transition: 0.2s; margin-top: 10px; }
+        .btn-close:hover { background: #555; color: white; }
         
         .btn-skill { background: #9c27b0; color: white; padding: 8px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; width: 100%; margin-top: 5px;}
+        .btn-skill:hover { background: #ab47bc; }
+        .btn-skill:disabled { background: #444; color: #888; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -96,7 +107,7 @@
         <p>Tap or press SPACE to drop!</p>
     </div>
     
-    <div id="saveIndicator">Cloud Saved...</div>
+    <div id="saveIndicator">Saved...</div>
     
     <button id="btnSettings" class="top-btn" onpointerdown="openSettings()">⚙️</button>
     <button id="btnMissions" class="top-btn" onpointerdown="openMissions()">📋</button>
@@ -156,47 +167,68 @@
     <canvas id="gameCanvas"></canvas>
 
 <script>
-    // --- TELEGRAM & ADSGRAM BRIDGE ---
+    // --- TELEGRAM INIT & HAPTICS ---
     const tg = window.Telegram.WebApp;
-    tg.expand();
-    tg.ready();
+    tg.expand(); // Forces full screen
 
-    let AdController = null;
-    function getAdController() {
-        if (AdController) return AdController;
-        if (window.Adsgram) { 
-            AdController = window.Adsgram.init({ blockId: "25014" });
-            return AdController;
+    function haptic(style = 'light') {
+        if (tg.HapticFeedback) {
+            // style can be 'light', 'medium', 'heavy', 'rigid', 'soft'
+            tg.HapticFeedback.impactOccurred(style);
         }
-        return null;
+    }
+
+    // --- ADSGRAM SDK INTEGRATION ---
+    let AdController = null;
+    if (window.Adsgram) {
+        // Initialize with your specific block ID
+        AdController = window.Adsgram.init({ blockId: "25014" });
     }
 
     const AdManager = {
         isAdPlaying: false,
-        showRewardedVideo: async function(rewardName, onSuccess, onFail) {
-            const controller = getAdController();
-            this.isAdPlaying = true;
-            if(audioCtx) audioCtx.suspend(); 
+        showRewardedVideo: function(rewardName, onSuccess, onFail) {
+            if (!AdController) {
+                // Fallback if running outside Telegram for testing
+                let watch = confirm(`[TEST] Watch ad for: ${rewardName}?`);
+                if (watch) onSuccess(); else if(onFail) onFail();
+                return;
+            }
             
-            try {
-                const result = controller ? await controller.show() : {done: confirm("[DEV] Watch Ad?")};
-                if (result.done) onSuccess(); else if(onFail) onFail();
-            } catch (e) { if(onFail) onFail(); } finally {
-                this.isAdPlaying = false;
-                if(!isAudioMuted && audioCtx) audioCtx.resume();
-            }
-        },
-        showInterstitial: async function(onClose) {
-            const controller = getAdController();
             this.isAdPlaying = true;
-            if(audioCtx) audioCtx.suspend();
-            try {
-                if (controller) await controller.show();
-            } catch (e) {} finally {
+            if(audioCtx && audioCtx.state === 'running') audioCtx.suspend(); 
+            
+            AdController.show().then((result) => {
+                // User successfully watched the ad
                 this.isAdPlaying = false;
-                if(!isAudioMuted && audioCtx) audioCtx.resume();
-                if(onClose) onClose();
+                if(!isAudioMuted && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                onSuccess();
+            }).catch((result) => {
+                // User closed the ad early or network error
+                this.isAdPlaying = false;
+                if(!isAudioMuted && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                if(onFail) onFail();
+            });
+        },
+        showInterstitial: function(onClose) {
+            // Adsgram relies heavily on rewarded, so we map interstitial to the standard show() call as well
+            if (!AdController) {
+                if (onClose) onClose();
+                return;
             }
+
+            this.isAdPlaying = true;
+            if(audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+            
+            AdController.show().then((result) => {
+                this.isAdPlaying = false;
+                if(!isAudioMuted && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                if (onClose) onClose();
+            }).catch((result) => {
+                this.isAdPlaying = false;
+                if(!isAudioMuted && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                if (onClose) onClose();
+            });
         }
     };
 
@@ -216,7 +248,7 @@
 
     let width, height; let isGamePaused = false; let isAudioMuted = false;
 
-    // RESTORED ECONOMY & STATS
+    // Economy & Stats
     let prestigeLevel = 0; const PRESTIGE_COST = 1000000; 
     const themes = [
         { name: "Classic", bg: "#111", trail: "rgba(17, 17, 17, 0.35)", pegOff: "#444", textMain: "#ffeb3b" },
@@ -246,6 +278,8 @@
     function getMaxBalls() { return 40 + (metaSkills.maxBalls.level * 5); }
     function getFeverDuration() { return 600 + (metaSkills.feverTime.level * 60); }
     function getMutationRate() { return 0.015 + (metaSkills.mutationRate.level * 0.01); }
+
+    const SAVE_KEY = 'asmrPachinkoSaveData_v8'; // Bumped for clean start
 
     let stats = { ballsDropped: 0, goldHit: 0, portalsHit: 0, feversTriggered: 0 };
     let activeMissions = []; let missionsCompleted = 0;
@@ -284,6 +318,7 @@
     }
 
     window.claimMission = function(index, reward) {
+        haptic('medium');
         money += reward; floatingTexts.push(new FloatingText(width/2, height/2, `MISSION COMPLETE! +$${formatMoney(reward)}`, '#0f0', 24));
         spawnParticles(width/2, height/2, '#0f0', 30); missionsCompleted++;
         activeMissions[index] = generateMission(); renderMissions(); updateUI(); saveGame(); checkMissions();
@@ -300,6 +335,7 @@
     window.buySkill = function(key) {
         let s = metaSkills[key];
         if (neonShards >= s.cost && s.level < s.max) {
+            haptic('light');
             neonShards -= s.cost; s.level++; renderSkills(); updateUI(); saveGame();
         }
     }
@@ -310,201 +346,340 @@
         return Math.floor(num).toString();
     }
 
+    function applyThemeColors() {
+        document.body.style.backgroundColor = currentTheme.bg; 
+        titleText.style.color = currentTheme.textMain; 
+        titleText.style.textShadow = `0 0 10px ${currentTheme.textMain}`;
+        multiplierText.innerText = `Multiplier: x${prestigeMultiplier} (${currentTheme.name})`;
+        
+        // Sync Telegram header color with game background for a seamless look
+        if(tg && tg.setHeaderColor) tg.setHeaderColor(currentTheme.bg);
+    }
+
     function updateUI() {
-        moneyText.innerText = formatMoney(money);
+        let moneyStr = formatMoney(money);
+        if (moneyText.innerText !== moneyStr) moneyText.innerText = moneyStr;
+
         for (let key in upgrades) {
             let u = upgrades[key]; 
             let currentCost = Math.floor(u.baseCost * Math.pow(u.costMult, u.level - (key === 'mult' ? 1 : 0)));
-            u.elCost.innerText = (key === 'bounce' && u.level >= 4) ? "MAX" : "$" + formatMoney(currentCost);
-            u.elLvl.innerText = "Lvl " + u.level;
-            u.btn.disabled = money < currentCost || (key === 'bounce' && u.level >= 4);
+            let costStr = "$" + formatMoney(currentCost);
+            let lvlStr = "Lvl " + u.level;
+            
+            if (key === 'bounce' && u.level >= 4) { 
+                if (u.elCost.innerText !== "MAX") u.elCost.innerText = "MAX";
+                if (u.elLvl.innerText !== lvlStr) u.elLvl.innerText = lvlStr;
+                if (!u.btn.disabled) u.btn.disabled = true;
+                if (u.btn.style.borderColor !== '#222') u.btn.style.borderColor = '#222';
+            } else { 
+                if (u.elCost.innerText !== costStr) u.elCost.innerText = costStr;
+                if (u.elLvl.innerText !== lvlStr) u.elLvl.innerText = lvlStr;
+                
+                let isDisabled = money < currentCost;
+                if (u.btn.disabled !== isDisabled) u.btn.disabled = isDisabled; 
+                
+                let borderColor = isDisabled ? '#222' : '#4fc3f7';
+                if (u.btn.style.borderColor !== borderColor) u.btn.style.borderColor = borderColor;
+            }
         }
-        btnPrestige.style.display = money >= PRESTIGE_COST ? 'block' : 'none';
+        
+        let displayPrestige = money >= PRESTIGE_COST ? 'block' : 'none';
+        if (btnPrestige.style.display !== displayPrestige) btnPrestige.style.display = displayPrestige;
+        
         if (prestigeLevel > 0 || neonShards > 0) {
-            btnSkills.style.display = 'block';
-            shardText.style.display = 'block';
-            shardCountUI.innerText = neonShards;
+            if (btnSkills.style.display !== 'block') btnSkills.style.display = 'block';
+            if (shardText.style.display !== 'block') shardText.style.display = 'block';
+            if (shardCountUI.innerText != neonShards) shardCountUI.innerText = neonShards;
         }
     }
 
-    // CLOUD SAVE INTEGRATION
     function saveGame() {
         const saveData = {
-            money, prestigeLevel, neonShards, stats, activeMissions, missionsCompleted, isAudioMuted,
+            money: money, prestigeLevel: prestigeLevel, neonShards: neonShards, lastSaveTime: Date.now(), isMuted: isAudioMuted,
             upgrades: { auto: upgrades.auto.level, mult: upgrades.mult.level, bounce: upgrades.bounce.level },
-            meta: { max: metaSkills.maxBalls.level, fever: metaSkills.feverTime.level, mut: metaSkills.mutationRate.level },
-            lastSave: Date.now()
+            metaSkills: { maxBalls: metaSkills.maxBalls.level, feverTime: metaSkills.feverTime.level, mutationRate: metaSkills.mutationRate.level },
+            stats: stats, activeMissions: activeMissions, missionsCompleted: missionsCompleted
         };
-        tg.CloudStorage.setItem('asmr_save_v3', JSON.stringify(saveData), (err, ok) => {
-            if(ok) { saveIndicator.style.opacity = 1; setTimeout(() => saveIndicator.style.opacity = 0, 1000); }
-        });
+        localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+        saveIndicator.style.opacity = 1; setTimeout(() => { saveIndicator.style.opacity = 0; }, 1000);
     }
 
     function loadGame() {
-        tg.CloudStorage.getItem('asmr_save_v3', (err, savedString) => {
-            if (savedString) {
-                const s = JSON.parse(savedString);
-                money = s.money || 0; prestigeLevel = s.prestigeLevel || 0; neonShards = s.neonShards || 0;
-                isAudioMuted = s.isAudioMuted || false;
-                if(s.upgrades) { upgrades.auto.level = s.upgrades.auto; upgrades.mult.level = s.upgrades.mult; upgrades.bounce.level = s.upgrades.bounce; }
-                if(s.meta) { metaSkills.maxBalls.level = s.meta.max; metaSkills.feverTime.level = s.meta.fever; metaSkills.mutationRate.level = s.meta.mut; }
-                stats = s.stats || stats; activeMissions = s.activeMissions || []; missionsCompleted = s.missionsCompleted || 0;
+        const savedString = localStorage.getItem(SAVE_KEY);
+        if (savedString) {
+            try {
+                const saved = JSON.parse(savedString);
+                money = saved.money || 0; prestigeLevel = saved.prestigeLevel || 0; neonShards = saved.neonShards || 0;
+                isAudioMuted = saved.isMuted || false; btnMuteToggle.innerText = isAudioMuted ? "🔇 Audio: OFF" : "🔊 Audio: ON";
+                if (saved.upgrades) { upgrades.auto.level = saved.upgrades.auto || 0; upgrades.mult.level = saved.upgrades.mult || 1; upgrades.bounce.level = saved.upgrades.bounce || 0; }
+                if (saved.metaSkills) { metaSkills.maxBalls.level = saved.metaSkills.maxBalls || 0; metaSkills.feverTime.level = saved.metaSkills.feverTime || 0; metaSkills.mutationRate.level = saved.metaSkills.mutationRate || 0; }
                 
+                stats = saved.stats || { ballsDropped: 0, goldHit: 0, portalsHit: 0, feversTriggered: 0 };
+                activeMissions = saved.activeMissions || []; missionsCompleted = saved.missionsCompleted || 0;
+
                 prestigeMultiplier = 1 + (prestigeLevel * 2); baseHitValue = upgrades.mult.level; bounceFactor = Math.min(0.8, 0.5 + (upgrades.bounce.level * 0.075));
                 currentTheme = themes[prestigeLevel % themes.length];
-                document.body.style.backgroundColor = currentTheme.bg; titleText.style.color = currentTheme.textMain;
-                multiplierText.innerText = `Multiplier: x${prestigeMultiplier} (${currentTheme.name})`;
+                applyThemeColors();
 
-                if (s.lastSave && upgrades.auto.level > 0) {
-                    let secondsAway = Math.floor((Date.now() - s.lastSave) / 1000);
-                    if (secondsAway > 60) {
+                if (saved.lastSaveTime && upgrades.auto.level > 0) {
+                    let secondsAway = Math.floor((Date.now() - saved.lastSaveTime) / 1000);
+                    if (secondsAway > 60) { 
+                        let effectiveSeconds = Math.min(secondsAway, 43200); 
                         let dropsPerSec = 1000 / Math.max(250, 3000 - (upgrades.auto.level * 300));
-                        let earnings = Math.min(secondsAway, 43200) * dropsPerSec * (baseHitValue * 5 * prestigeMultiplier);
-                        showOfflineEarningsModal(earnings);
+                        let estimatedEarnings = effectiveSeconds * dropsPerSec * (baseHitValue * 5 * prestigeMultiplier);
+                        showOfflineEarningsModal(estimatedEarnings);
                     }
                 }
-            }
-            initBoard(); initMissions(); checkMissions(); updateUI();
-        });
+            } catch (e) { console.error("Corrupted save", e); }
+        }
+        initMissions(); checkMissions();
     }
 
-    // MODALS
+    setInterval(saveGame, 5000);
+
+    function openSettings() { haptic('light'); isGamePaused = true; settingsOverlay.style.display = 'flex'; }
+    function openMissions() { haptic('light'); renderMissions(); isGamePaused = true; missionsOverlay.style.display = 'flex'; }
+    function openSkills() { haptic('light'); renderSkills(); isGamePaused = true; skillsOverlay.style.display = 'flex'; }
+    window.closeModals = function() { 
+        haptic('light');
+        settingsOverlay.style.display = 'none'; missionsOverlay.style.display = 'none'; skillsOverlay.style.display = 'none'; modalOverlay.style.display = 'none'; 
+        isGamePaused = false; saveGame(); checkMissions();
+    }
+    
+    window.toggleMute = function() { haptic('light'); isAudioMuted = !isAudioMuted; btnMuteToggle.innerText = isAudioMuted ? "🔇 Audio: OFF" : "🔊 Audio: ON"; if (isAudioMuted && audioCtx) audioCtx.suspend(); else if (!isAudioMuted && audioCtx) audioCtx.resume(); }
+    window.hardReset = function() { haptic('rigid'); if (confirm("⚠️ WARNING: DELETE ALL SAVE DATA?")) { localStorage.removeItem(SAVE_KEY); location.reload(); } }
+
     function showOfflineEarningsModal(amount) {
         isGamePaused = true; modalOverlay.style.display = 'flex'; modalTitle.innerText = "Welcome Back!";
         modalDesc.innerText = `Auto-droppers earned $${formatMoney(amount)} while away.`;
-        btnModalAd.onpointerdown = () => { AdManager.showRewardedVideo("3x Profit", () => { money += (amount * 3); closeModals(); }); };
-        btnModalClaim.onpointerdown = () => { money += amount; closeModals(); };
+        btnModalAd.innerText = `Watch Ad for 3x ($${formatMoney(amount * 3)})`; btnModalClaim.innerText = `Claim Normal ($${formatMoney(amount)})`;
+        btnModalAd.onpointerdown = () => { haptic('light'); AdManager.showRewardedVideo("3x Offline Earnings", () => { money += (amount * 3); updateUI(); saveGame(); closeModals(); }, () => { closeModals(); }); };
+        btnModalClaim.onpointerdown = () => { haptic('light'); money += amount; updateUI(); saveGame(); closeModals(); };
     }
 
     function showGoblinModal() {
         isGamePaused = true; modalOverlay.style.display = 'flex'; modalTitle.innerText = "Loot Goblin Caught!";
-        let bounty = 500 * prestigeMultiplier * baseHitValue;
-        modalDesc.innerText = `The goblin drops $${formatMoney(bounty)}. Watch ad for INSTANT FEVER!`;
-        btnModalAd.onpointerdown = () => { AdManager.showRewardedVideo("Goblin Fever", () => { money += bounty; triggerFever(); closeModals(); }); };
-        btnModalClaim.onpointerdown = () => { money += bounty; closeModals(); };
+        let goblinBounty = 500 * prestigeMultiplier * baseHitValue; modalDesc.innerText = `The goblin drops $${formatMoney(goblinBounty)}. Watch an ad to trigger INSTANT FEVER MODE!`;
+        btnModalAd.innerText = `Watch Ad for FEVER + $${formatMoney(goblinBounty)}`; btnModalClaim.innerText = `Just take $${formatMoney(goblinBounty)}`;
+        btnModalAd.onpointerdown = () => { haptic('light'); AdManager.showRewardedVideo("Goblin Fever", () => { haptic('heavy'); money += goblinBounty; stats.feversTriggered++; checkMissions(); feverActive = true; feverFramesLeft = getFeverDuration(); feverCharge = MAX_FEVER; shakeAmount = 30; playFeverChord(); updateUI(); closeModals(); }, () => { closeModals(); }); };
+        btnModalClaim.onpointerdown = () => { haptic('light'); money += goblinBounty; updateUI(); closeModals(); };
     }
 
-    function openSettings() { isGamePaused = true; settingsOverlay.style.display = 'flex'; }
-    function openMissions() { renderMissions(); isGamePaused = true; missionsOverlay.style.display = 'flex'; }
-    function openSkills() { renderSkills(); isGamePaused = true; skillsOverlay.style.display = 'flex'; }
-    function closeModals() { settingsOverlay.style.display = 'none'; missionsOverlay.style.display = 'none'; skillsOverlay.style.display = 'none'; modalOverlay.style.display = 'none'; isGamePaused = false; saveGame(); }
-    function toggleMute() { isAudioMuted = !isAudioMuted; btnMuteToggle.innerText = isAudioMuted ? "🔇 Audio: OFF" : "🔊 Audio: ON"; }
-    function hardReset() { if (confirm("Wipe Progress?")) { tg.CloudStorage.removeItem('asmr_save_v3', () => location.reload()); } }
-
-    function buyUpgrade(type) {
-        let u = upgrades[type]; let cost = Math.floor(u.baseCost * Math.pow(u.costMult, u.level - (type === 'mult' ? 1 : 0)));
-        if (money >= cost) {
-            money -= cost; u.level++;
-            if (type === 'mult') baseHitValue = u.level;
-            else if (type === 'bounce') bounceFactor = Math.min(0.8, 0.5 + (u.level * 0.075));
-            updateUI(); saveGame();
-        }
-    }
-
-    function doPrestige() {
+    window.doPrestige = function() {
+        haptic('medium');
         if (money >= PRESTIGE_COST) {
             AdManager.showInterstitial(() => {
-                neonShards += (prestigeLevel + 1); prestigeLevel++; money = 0;
+                let earnedShards = prestigeLevel + 1; 
+                neonShards += earnedShards;
+                floatingTexts.push(new FloatingText(width/2, height/2, `PRESTIGE! +💎${earnedShards} Shards`, '#e040fb', 30));
+                
+                money = 0; prestigeLevel++; prestigeMultiplier = 1 + (prestigeLevel * 2);
                 upgrades.auto.level = 0; upgrades.mult.level = 1; upgrades.bounce.level = 0;
-                baseHitValue = 1; bounceFactor = 0.5; balls = []; particles = []; feverCharge = 0; feverActive = false;
-                loadGame(); // Refresh state
+                baseHitValue = 1; bounceFactor = 0.5; balls = []; particles = []; 
+                feverCharge = 0; feverActive = false; feverCooldown = 0; initBoard();
+                
+                currentTheme = themes[prestigeLevel % themes.length];
+                applyThemeColors();
+                
+                updateUI(); saveGame();
             });
         }
     }
 
-    // --- ORIGINAL ENGINE CORE ---
-    let audioCtx = null; const scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25];
-    function playNote(pegY, isSpecial = false) { if (isAudioMuted || !audioCtx || audioCtx.currentTime < 0.1) return; const noteIndex = Math.floor((1 - (pegY / height)) * (scale.length - 1)); const freq = scale[Math.max(0, Math.min(noteIndex, scale.length - 1))] * (isSpecial ? 2 : 1); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime); gain.gain.setValueAtTime(0.05, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.8); }
+    window.buyUpgrade = function(type) {
+        haptic('light');
+        let u = upgrades[type]; let currentCost = Math.floor(u.baseCost * Math.pow(u.costMult, u.level - (type === 'mult' ? 1 : 0)));
+        if (money >= currentCost) {
+            money -= currentCost; u.level++;
+            if (type === 'mult') baseHitValue = u.level;
+            else if (type === 'bounce') bounceFactor = Math.min(0.8, 0.5 + (u.level * 0.075)); 
+            updateUI(); saveGame();
+        }
+    };
+
+    let audioCtx = null; const scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25]; let lastNoteTime = 0;
+    function playFeverChord() { if (isAudioMuted || !audioCtx || audioCtx.state !== 'running') return; [261.63, 329.63, 392.00, 523.25].forEach(freq => { const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime); gainNode.gain.setValueAtTime(0, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.05, audioCtx.currentTime + 0.1); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2); osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 2); }); }
+    function playNote(pegY, isSpecial = false) { if (isAudioMuted || !audioCtx || audioCtx.state !== 'running' || audioCtx.currentTime - lastNoteTime < 0.05) return; lastNoteTime = audioCtx.currentTime; const noteIndex = Math.floor((1 - (pegY / height)) * (scale.length - 1)); const freq = scale[Math.max(0, Math.min(noteIndex, scale.length - 1))] * (isSpecial ? 2 : 1) * (feverActive ? 1.5 : 1); const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain(); osc.type = isSpecial || feverActive ? 'triangle' : 'sine'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime); gainNode.gain.setValueAtTime(0, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(isSpecial || feverActive ? 0.08 : 0.06, audioCtx.currentTime + 0.05); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1); osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 1); }
 
     let balls = [], pegs = [], buckets = [], particles = [], floatingTexts = [];
-    const gravity = 0.2; const paddle = { x: 0, y: 0, width: 60, height: 10, vx: 4 };
+    const gravity = 0.2; const shopHeight = 100; const paddle = { x: 0, y: 0, width: 60, height: 10, vx: 4 };
 
     class FloatingText { constructor(x, y, text, color, size = 16) { this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.vy = -1.5; this.size = size; } update() { this.y += this.vy; this.life -= 0.02; } draw() { ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.font = `bold ${this.size}px sans-serif`; ctx.textAlign = "center"; ctx.fillText(this.text, this.x, this.y); ctx.globalAlpha = 1.0; } }
     class Particle { constructor(x, y, color) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 6; this.vy = (Math.random() - 0.5) * 6; this.life = 1.0; this.decay = Math.random() * 0.05 + 0.02; this.color = color; this.size = Math.random() * 3 + 1; } update() { this.x += this.vx; this.y += this.vy; this.life -= this.decay; } draw() { ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1.0; } }
-    class Ball { constructor(x, y) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 2; this.vy = feverActive ? 5 : 2; this.r = Math.min(width, height) * 0.015; this.color = `hsl(${Math.random() * 360}, 100%, 70%)`; this.combo = 0; } update() { this.vy += gravity; this.x += this.vx; this.y += this.vy; if (this.x - this.r < 0 || this.x + this.r > width) { this.vx *= -bounceFactor; this.x = this.x < width/2 ? this.r : width - this.r; } } draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fillStyle = this.combo > 5 || feverActive ? '#fff' : this.color; ctx.fill(); } }
+    class Ball { constructor(x, y) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 2; this.vy = feverActive ? 5 : 2; this.r = Math.min(width, height) * 0.015; this.color = `hsl(${Math.random() * 360}, 100%, 70%)`; this.combo = 0; } update() { this.vy += gravity; this.x += this.vx; this.y += this.vy; if (this.x - this.r < 0) { this.x = this.r; this.vx *= -bounceFactor; } if (this.x + this.r > width) { this.x = width - this.r; this.vx *= -bounceFactor; } } draw() { if (this.combo > 5 || feverActive) { ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 4, 0, Math.PI * 2); ctx.fillStyle = feverActive ? `hsla(${Math.random()*360}, 100%, 50%, 0.5)` : "rgba(255, 255, 255, 0.5)"; ctx.fill(); ctx.closePath(); } ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fillStyle = this.combo > 5 || feverActive ? '#fff' : this.color; ctx.fill(); ctx.closePath(); } }
 
     function initBoard() {
-        pegs = []; buckets = []; width = window.innerWidth; height = window.innerHeight; canvas.width = width; canvas.height = height;
-        paddle.y = height * 0.12; paddle.vx = 4;
-        for (let r = 0; r < 10; r++) { const offset = (r % 2 === 0) ? width/16 : 0; for (let c = 0; c < 8; c++) { pegs.push({ x: c * (width/8) + offset + width/16, y: height*0.2 + r*(height*0.06), radius: Math.min(width, height) * 0.012, flashTimer: 0, type: 0, pulse: Math.random() * 6 }); } }
-        for (let i = 0; i < 5; i++) { buckets.push({ x: i * (width/5), y: height - 140, w: width/5, h: 40, mult: [1,3,5,3,1][i], color: ["#888","#4fc3f7","#ffeb3b","#4fc3f7","#888"][i], flashTimer: 0 }); }
+        pegs = []; buckets = []; const rows = 10; const cols = 8; const spacingX = width / cols; const boardHeight = height - shopHeight - 80; const spacingY = boardHeight * 0.8 / rows; const startY = height * 0.2;
+        paddle.y = height * 0.12; paddle.x = width / 2; paddle.width = Math.max(40, width * 0.1);
+        for (let r = 0; r < rows; r++) { const offset = (r % 2 === 0) ? spacingX / 2 : 0; for (let c = 0; c < cols; c++) { pegs.push({ x: c * spacingX + offset + spacingX / 2, y: startY + r * spacingY, radius: Math.min(width, height) * 0.012, flashTimer: 0, type: 0, pulse: Math.random() * Math.PI * 2 }); } }
+        const bucketMultipliers = [1, 3, 5, 3, 1]; const bucketWidth = width / 5; const bucketY = height - shopHeight - 40;
+        for (let i = 0; i < 5; i++) { buckets.push({ x: i * bucketWidth, y: bucketY, w: bucketWidth, h: 40, mult: bucketMultipliers[i], color: bucketMultipliers[i] === 5 ? '#ffeb3b' : (bucketMultipliers[i] === 3 ? '#4fc3f7' : '#888'), flashTimer: 0 }); }
     }
 
-    function triggerFever() { feverActive = true; feverFramesLeft = getFeverDuration(); feverCharge = MAX_FEVER; stats.feversTriggered++; checkMissions(); tg.HapticFeedback.notificationOccurred('success'); }
+    function resizeCanvas() { width = window.innerWidth; height = window.innerHeight; canvas.width = width; canvas.height = height; initBoard(); }
+    window.addEventListener('resize', resizeCanvas);
+    function spawnParticles(x, y, color, count) { for(let i=0; i<count; i++) particles.push(new Particle(x, y, color)); }
 
-    function gameLoop(timestamp) {
-        if (AdManager.isAdPlaying || isGamePaused) { requestAnimationFrame(gameLoop); return; }
-        ctx.fillStyle = feverActive ? `rgba(${Math.random()*40}, ${Math.random()*20}, ${Math.random()*40}, 0.35)` : currentTheme.trail;
-        ctx.fillRect(0, 0, width, height);
-
-        // Paddle Movement
-        paddle.x += feverActive ? paddle.vx * 2 : paddle.vx;
-        if (paddle.x < 40 || paddle.x > width - 40) paddle.vx *= -1;
-        ctx.fillStyle = '#fff'; ctx.fillRect(paddle.x - 30, paddle.y - 5, 60, 10);
-
-        // Auto-Drop
-        if (upgrades.auto.level > 0 && timestamp - lastAutoDropTime > Math.max(250, 3000 - (upgrades.auto.level * 300))) {
-            if (balls.length < getMaxBalls()) { balls.push(new Ball(paddle.x, paddle.y + 10)); lastAutoDropTime = timestamp; }
-        }
-
-        // Logic
-        if (feverActive) { feverFramesLeft--; if (feverFramesLeft <= 0) { feverActive = false; feverCharge = 0; } }
-
-        for (let b of balls) { b.update(); b.draw(); }
-        for (let p of pegs) { 
-            ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); 
-            ctx.fillStyle = p.flashTimer > 0 ? '#fff' : (p.type==1?"#ffd700":currentTheme.pegOff); ctx.fill(); 
-            if (p.flashTimer > 0) p.flashTimer--;
-        }
-        for (let i = floatingTexts.length - 1; i >= 0; i--) { floatingTexts[i].update(); floatingTexts[i].draw(); if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1); }
-
-        resolveCollisions();
-        
-        // Goblin Spawn
-        if (!goblin.active && !feverActive && Math.random() < 0.001) { goblin.active = true; goblin.x = -50; }
-        if (goblin.active) {
-            goblin.x += 3; ctx.font = "40px sans-serif"; ctx.fillText("👽", goblin.x, height * 0.4);
-            if (goblin.x > width + 50) goblin.active = false;
-        }
-
-        requestAnimationFrame(gameLoop);
+    function drawFeverBar() {
+        const barWidth = Math.min(300, width * 0.6); const barX = (width - barWidth) / 2; const barY = 20;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; ctx.fillRect(barX, barY, barWidth, 15);
+        const fillPercent = feverActive ? (feverFramesLeft / getFeverDuration()) : (feverCharge / MAX_FEVER);
+        ctx.fillStyle = feverCooldown > 0 ? "#555" : (feverActive ? `hsl(${Date.now() % 360}, 100%, 50%)` : "#ff007f"); ctx.fillRect(barX, barY, barWidth * fillPercent, 15);
+        ctx.strokeStyle = feverActive ? "#fff" : "#444"; ctx.lineWidth = 2; ctx.strokeRect(barX, barY, barWidth, 15);
+        ctx.fillStyle = "#fff"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; let barText = feverActive ? "FEVER MODE ACTIVE!" : (feverCooldown > 0 ? "COOLDOWN..." : "FEVER"); ctx.fillText(barText, width / 2, barY + 12);
+        if (feverActive) { ctx.shadowBlur = 20; ctx.shadowColor = `hsl(${Date.now() % 360}, 100%, 50%)`; ctx.strokeRect(barX, barY, barWidth, 15); ctx.shadowBlur = 0; }
     }
 
     function resolveCollisions() {
         for (let i = balls.length - 1; i >= 0; i--) {
             let b = balls[i];
-            for (let p of pegs) {
-                let dx = b.x - p.x, dy = b.y - p.y, dist = Math.sqrt(dx*dx + dy*dy);
-                if (dist < b.r + p.radius) {
-                    b.vy *= -bounceFactor; b.vx += (Math.random() - 0.5) * 4;
-                    p.flashTimer = 15; b.combo++; tg.HapticFeedback.impactOccurred('light');
-                    money += (baseHitValue * 0.1 * prestigeMultiplier);
-                    if (Math.random() < getMutationRate()) p.type = 1;
+            for (let j = 0; j < pegs.length; j++) {
+                let p = pegs[j]; let dx = b.x - p.x; let dy = b.y - p.y;
+                let distance = Math.sqrt(dx * dx + dy * dy); let minDist = b.r + p.radius;
+                if (distance < minDist) {
+                    let overlap = minDist - distance; if (distance === 0) { dx = 1; dy = 1; distance = 1.414; } 
+                    let nx = dx / distance; let ny = dy / distance; b.x += nx * overlap; b.y += ny * overlap;
+
+                    let pType = p.type;
+                    if (pType === 2) { 
+                        haptic('heavy');
+                        b.vy = -12; b.vx = (Math.random() - 0.5) * 15; shakeAmount = 25; spawnParticles(p.x, p.y, '#ff3300', 20); p.type = 0; 
+                    } 
+                    else if (pType === 3) { spawnParticles(p.x, p.y, '#aa00ff', 15); b.x = paddle.x; b.y = paddle.y + 20; b.vy = 2; b.vx = (Math.random() - 0.5) * 4; spawnParticles(b.x, b.y, '#aa00ff', 15); p.type = 0; stats.portalsHit++; checkMissions(); } 
+                    else { let dotProduct = (b.vx * nx) + (b.vy * ny); b.vx = (b.vx - 2 * dotProduct * nx) * bounceFactor; b.vy = (b.vy - 2 * dotProduct * ny) * bounceFactor; }
+
+                    if (Math.abs(b.vx) < 0.5 && Math.abs(b.vy) < 0.5) { b.vx += (Math.random() > 0.5 ? 1.5 : -1.5); b.vy -= 1; }
+                    b.combo++; let isComboActive = b.combo > 5; let feverMultiplier = feverActive ? 3 : 1; let comboMultiplier = Math.min(5, 1 + Math.floor(b.combo / 5)); 
+
+                    p.flashTimer = 15; playNote(p.y, isComboActive || pType > 0);
+                    let earned = (baseHitValue * 0.1 * prestigeMultiplier * comboMultiplier * feverMultiplier);
+                    if (pType === 1) { earned *= 10; spawnParticles(p.x, p.y, '#ffd700', 10); p.type = 0; stats.goldHit++; checkMissions(); } money += earned;
+                    let textStr = (isComboActive || pType > 0 || feverActive) ? `+${earned.toFixed(1)}!` : `+${earned.toFixed(1)}`;
+                    let textColor = feverActive ? `hsl(${Math.random()*360}, 100%, 60%)` : (pType === 1 ? '#ffd700' : (pType === 2 ? '#ff3300' : (pType === 3 ? '#aa00ff' : (isComboActive ? "#fff" : b.color))));
+                    floatingTexts.push(new FloatingText(p.x, p.y - 10, textStr, textColor, isComboActive || feverActive || pType > 0 ? 20 : 14));
+                    if (pType === 0) spawnParticles(p.x, p.y, b.color, isComboActive || feverActive ? 6 : 3);
+                    
+                    if (pType === 0 && Math.random() < getMutationRate()) p.type = Math.floor(Math.random() * 3) + 1; 
                 }
             }
-            if (b.y > height - 140) {
-                let idx = Math.floor(b.x / (width/5));
-                if (buckets[idx]) {
-                    let earned = baseHitValue * 10 * buckets[idx].mult * prestigeMultiplier;
-                    money += earned; floatingTexts.push(new FloatingText(b.x, b.y - 20, `+$${Math.floor(earned)}`, buckets[idx].color));
-                    if (!feverActive) { feverCharge += buckets[idx].mult * 10; if (feverCharge >= MAX_FEVER) triggerFever(); }
-                    tg.HapticFeedback.notificationOccurred('success');
+
+            if (b.y > height - shopHeight - 40) {
+                let bucketIndex = Math.floor(b.x / (width / 5));
+                if (bucketIndex >= 0 && bucketIndex < 5) {
+                    let bk = buckets[bucketIndex]; let feverMultiplier = feverActive ? 3 : 1; let comboMultiplier = Math.min(5, 1 + Math.floor(b.combo / 5)); 
+                    let earned = (baseHitValue * 10 * bk.mult * prestigeMultiplier * comboMultiplier * feverMultiplier);
+                    money += earned; bk.flashTimer = 20;
+                    floatingTexts.push(new FloatingText(b.x, b.y - 20, `+$${Math.floor(earned)}`, bk.color, 28));
+                    spawnParticles(b.x, b.y, bk.color, feverActive ? 40 : 20);
+                    
+                    if (bk.mult === 5) {
+                        haptic('medium');
+                        shakeAmount = feverActive ? 25 : 15;
+                    }
+
+                    if (!feverActive && feverCooldown <= 0) {
+                        feverCharge += (bk.mult * 10);
+                        if (feverCharge >= MAX_FEVER) { 
+                            haptic('heavy');
+                            feverActive = true; feverFramesLeft = getFeverDuration(); feverCharge = MAX_FEVER; shakeAmount = 30; playFeverChord(); stats.feversTriggered++; checkMissions(); 
+                        }
+                    }
                 }
-                balls.splice(i, 1);
-                updateUI();
+                balls.splice(i, 1); updateUI();
             }
         }
     }
 
-    window.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('button') || isGamePaused) return;
+    function gameLoop(timestamp) {
+        if (AdManager.isAdPlaying || isGamePaused) { requestAnimationFrame(gameLoop); return; }
+
+        if (feverActive) ctx.fillStyle = `rgba(${Math.random()*40}, ${Math.random()*20}, ${Math.random()*40}, 0.35)`; else ctx.fillStyle = currentTheme.trail;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.save();
+        if (shakeAmount > 0.5) { let dx = (Math.random() - 0.5) * shakeAmount; let dy = (Math.random() - 0.5) * shakeAmount; ctx.translate(dx, dy); shakeAmount *= 0.9; }
+
+        if (feverActive) { feverFramesLeft--; if (feverFramesLeft <= 0) { feverActive = false; feverCharge = 0; feverCooldown = 240; } }
+        if (feverCooldown > 0) feverCooldown--;
+
+        let currentPaddleSpeed = feverActive ? (paddle.vx > 0 ? 12 : -12) : (paddle.vx > 0 ? 4 : -4);
+        paddle.x += currentPaddleSpeed; paddle.vx = currentPaddleSpeed; 
+        if (paddle.x - paddle.width/2 < 0 || paddle.x + paddle.width/2 > width) paddle.vx *= -1;
+        
+        ctx.fillStyle = '#fff'; ctx.shadowBlur = feverActive ? 20 : 10; ctx.shadowColor = feverActive ? `hsl(${Date.now() % 360}, 100%, 50%)` : currentTheme.textMain;
+        ctx.fillRect(paddle.x - paddle.width/2, paddle.y - paddle.height/2, paddle.width, paddle.height); ctx.shadowBlur = 0;
+
+        let currentMaxBalls = feverActive ? getMaxBalls() * 2 : getMaxBalls();
+        if (feverActive && balls.length < currentMaxBalls) {
+            if (timestamp - lastAutoDropTime > 80) { balls.push(new Ball(paddle.x, paddle.y + 10)); stats.ballsDropped++; lastAutoDropTime = timestamp; checkMissions(); }
+        } else if (upgrades.auto.level > 0 && balls.length < currentMaxBalls) {
+            let dropInterval = Math.max(250, 3000 - (upgrades.auto.level * 300));
+            if (timestamp - lastAutoDropTime > dropInterval) { balls.push(new Ball(paddle.x, paddle.y + 10)); stats.ballsDropped++; lastAutoDropTime = timestamp; checkMissions(); }
+        }
+
+        for (let bk of buckets) {
+            ctx.fillStyle = bk.flashTimer > 0 ? '#fff' : currentTheme.bg; ctx.fillRect(bk.x, bk.y, bk.w, bk.h);
+            ctx.strokeStyle = feverActive ? `hsl(${Date.now() % 360}, 100%, 50%)` : bk.color; ctx.lineWidth = 2; ctx.strokeRect(bk.x, bk.y, bk.w, bk.h);
+            ctx.fillStyle = bk.color; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center"; ctx.fillText(bk.mult + "x", bk.x + bk.w/2, bk.y + 25);
+            if (bk.flashTimer > 0) bk.flashTimer--;
+        }
+
+        for (let p of pegs) {
+            p.pulse += 0.1; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            if (p.flashTimer > 0) { ctx.fillStyle = '#fff'; ctx.shadowBlur = 15; ctx.shadowColor = '#fff'; p.flashTimer--; } 
+            else { 
+                if (p.type === 1) { ctx.fillStyle = '#ffd700'; ctx.shadowBlur = 10; ctx.shadowColor = '#ffd700'; } 
+                else if (p.type === 2) { ctx.fillStyle = '#ff3300'; ctx.shadowBlur = 10 + Math.sin(p.pulse)*5; ctx.shadowColor = '#ff3300'; } 
+                else if (p.type === 3) { ctx.fillStyle = '#aa00ff'; ctx.shadowBlur = 15; ctx.shadowColor = '#aa00ff'; } 
+                else { ctx.fillStyle = currentTheme.pegOff; ctx.shadowBlur = 0; } 
+            }
+            ctx.fill(); ctx.closePath();
+            if (p.type === 3 && p.flashTimer <= 0) { ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 0.5, 0, Math.PI * 2); ctx.fillStyle = '#000'; ctx.fill(); ctx.closePath(); }
+        }
+        ctx.shadowBlur = 0;
+
+        if (!goblin.active && !feverActive && Date.now() - lastGoblinSpawnTime > 60000) { if (Math.random() < 0.005) spawnGoblin(); }
+        if (goblin.active) {
+            goblin.time += 0.05; goblin.x += goblin.dir * 3; goblin.y = height * 0.4 + Math.sin(goblin.time) * 80; 
+            ctx.font = "40px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("👽", goblin.x, goblin.y);
+            if (goblin.x < -100 || goblin.x > width + 100) { goblin.active = false; lastGoblinSpawnTime = Date.now(); }
+        }
+        
+        for (let b of balls) { b.update(); b.draw(); }
+        for (let i = particles.length - 1; i >= 0; i--) { particles[i].update(); particles[i].draw(); if (particles[i].life <= 0) particles.splice(i, 1); }
+        for (let i = floatingTexts.length - 1; i >= 0; i--) { floatingTexts[i].update(); floatingTexts[i].draw(); if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1); }
+
+        resolveCollisions(); ctx.restore(); drawFeverBar(); updateUI(); requestAnimationFrame(gameLoop);
+    }
+
+    function triggerDrop() {
+        if (isGamePaused || AdManager.isAdPlaying) return;
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (goblin.active && Math.abs(e.clientX - goblin.x) < 50) { goblin.active = false; showGoblinModal(); return; }
-        balls.push(new Ball(paddle.x, paddle.y + 10));
+        if (!isAudioMuted && audioCtx.state === 'suspended') audioCtx.resume();
+        let currentMaxBalls = feverActive ? getMaxBalls() * 2 : getMaxBalls();
+        if (balls.length < currentMaxBalls) { balls.push(new Ball(paddle.x, paddle.y + 10)); stats.ballsDropped++; checkMissions(); }
+    }
+
+    window.addEventListener('pointerdown', (e) => { 
+        if (e.target.closest('button') || isGamePaused) return; 
+        
+        if (goblin.active) { 
+            let dx = e.clientX - goblin.x; let dy = e.clientY - goblin.y; 
+            if (Math.sqrt(dx*dx + dy*dy) < goblin.r + 20) { 
+                haptic('medium');
+                goblin.active = false; spawnParticles(goblin.x, goblin.y, '#55ff55', 40); showGoblinModal(); return; 
+            } 
+        }
+        if (e.clientY < height - shopHeight) triggerDrop(); 
     });
 
-    window.addEventListener('resize', initBoard);
-    loadGame();
+    window.addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) triggerDrop(); } });
+
+    // Bootstrap
+    tg.ready();
+    loadGame(); 
+    resizeCanvas(); 
+    updateUI(); 
     requestAnimationFrame(gameLoop);
 
 </script>
