@@ -262,7 +262,7 @@
     function getFeverDuration() { return 600 + (metaSkills.feverTime.level * 60); }
     function getMutationRate() { return 0.015 + (metaSkills.mutationRate.level * 0.01); }
 
-    const SAVE_KEY = 'asmrPachinkoSaveData_v10'; // Safe fresh start
+    const SAVE_KEY = 'asmrPachinkoSaveData_v11'; 
 
     let stats = { ballsDropped: 0, goldHit: 0, portalsHit: 0, feversTriggered: 0 };
     let activeMissions = []; let missionsCompleted = 0;
@@ -442,8 +442,8 @@
     class FloatingText { constructor(x, y, text, color, size = 16) { this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.vy = -1.5; this.size = size; } update() { this.y += this.vy; this.life -= 0.02; } draw() { ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.font = `bold ${this.size}px sans-serif`; ctx.textAlign = "center"; ctx.fillText(this.text, this.x, this.y); ctx.globalAlpha = 1.0; } }
     class Particle { constructor(x, y, color) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 6; this.vy = (Math.random() - 0.5) * 6; this.life = 1.0; this.decay = Math.random() * 0.05 + 0.02; this.color = color; this.size = Math.random() * 3 + 1; } update() { this.x += this.vx; this.y += this.vy; this.life -= this.decay; } draw() { ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1.0; } }
     
-    function spawnFloatingText(x, y, text, color, size) { if (floatingTexts.length < MAX_TEXTS) floatingTexts.push(new FloatingText(x, y, text, color, size)); }
-    function spawnParticles(x, y, color, count) { let spawnCount = Math.min(count, MAX_PARTICLES - particles.length); for(let i=0; i<spawnCount; i++) particles.push(new Particle(x, y, color)); }
+    function spawnFloatingText(x, y, text, color, size) { if (floatingTexts.length < MAX_TEXTS && !isNaN(x) && !isNaN(y)) floatingTexts.push(new FloatingText(x, y, text, color, size)); }
+    function spawnParticles(x, y, color, count) { if (isNaN(x) || isNaN(y)) return; let spawnCount = Math.min(count, MAX_PARTICLES - particles.length); for(let i=0; i<spawnCount; i++) particles.push(new Particle(x, y, color)); }
 
     class Ball { 
         constructor(x, y) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 2; this.vy = feverActive ? 5 : 2; this.r = Math.min(width, height) * 0.015; this.color = `hsl(${Math.random() * 360}, 100%, 70%)`; this.combo = 0; } 
@@ -451,8 +451,12 @@
             this.vy += gravity; this.x += this.vx; this.y += this.vy; 
             if (this.x - this.r < 0) { this.x = this.r; this.vx *= -bounceFactor; } 
             if (this.x + this.r > width) { this.x = width - this.r; this.vx *= -bounceFactor; } 
-            // Anti-NaN / Anti-Tunnel Speed Limit Failsafe
-            if (isNaN(this.x) || isNaN(this.y)) { this.y = height + 500; }
+            // --- PHYSICS FLAW FIX ---
+            // Instead of leaving the X coordinate as NaN (which permanently crashes the draw loop),
+            // we safely snap the ball to valid coordinates far off-screen so the array can delete it normally.
+            if (isNaN(this.x) || isNaN(this.y)) { 
+                this.x = -1000; this.y = height + 1000; this.vx = 0; this.vy = 0; 
+            }
         } 
         draw() { if (this.combo > 5 || feverActive) { ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 4, 0, Math.PI * 2); ctx.fillStyle = feverActive ? `hsla(${Math.random()*360}, 100%, 50%, 0.5)` : "rgba(255, 255, 255, 0.5)"; ctx.fill(); ctx.closePath(); } ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fillStyle = this.combo > 5 || feverActive ? '#fff' : this.color; ctx.fill(); ctx.closePath(); } 
     }
@@ -482,7 +486,7 @@
         for (let i = balls.length - 1; i >= 0; i--) {
             let b = balls[i]; let hitsThisFrame = 0;
             for (let j = 0; j < pegs.length; j++) {
-                if (hitsThisFrame > 2) break; // Anti-Tunnel Loop Guard
+                if (hitsThisFrame > 2) break; 
                 let p = pegs[j]; let dx = b.x - p.x; let dy = b.y - p.y;
                 let distance = Math.sqrt(dx * dx + dy * dy); let minDist = b.r + p.radius;
                 if (distance < minDist) {
@@ -587,6 +591,9 @@
                 if (goblin.x < -100 || goblin.x > width + 100) { goblin.active = false; lastGoblinSpawnTime = Date.now(); }
             }
             
+            // Clean out broken balls natively
+            balls = balls.filter(b => !isNaN(b.x) && !isNaN(b.y));
+
             for (let b of balls) { b.update(); b.draw(); }
             for (let i = particles.length - 1; i >= 0; i--) { particles[i].update(); particles[i].draw(); if (particles[i].life <= 0) particles.splice(i, 1); }
             for (let i = floatingTexts.length - 1; i >= 0; i--) { floatingTexts[i].update(); floatingTexts[i].draw(); if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1); }
@@ -596,8 +603,8 @@
             drawFeverBar(); 
             updateUI(); 
         } catch(e) {
-            console.error("Game Loop Error caught and suppressed to prevent freeze:", e);
-            ctx.restore(); // Ensure canvas state isn't permanently locked
+            console.error("Game Loop Error caught and suppressed:", e);
+            ctx.restore(); 
         }
         
         requestAnimationFrame(gameLoop);
@@ -619,7 +626,6 @@
 
     window.addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) triggerDrop(); } });
 
-    // Bootstrap
     tg.ready();
     loadGame(); resizeCanvas(); updateUI(); requestAnimationFrame(gameLoop);
 
