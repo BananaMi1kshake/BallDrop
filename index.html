@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ASMR Pachinko Idle - Bulletproof TMA</title>
+    <title>ASMR Pachinko Idle - Stable TMA</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
@@ -27,6 +27,7 @@
             opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 15;
         }
 
+        /* Top Right Buttons */
         .top-btn {
             position: absolute; top: 15px; z-index: 20;
             background: transparent; border: none; font-size: 24px; cursor: pointer;
@@ -66,6 +67,7 @@
 
         .upgrade-btn *, .top-btn *, .btn-skill * { pointer-events: none; }
 
+        /* --- MODAL UI --- */
         .modal-overlay {
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); z-index: 100; justify-content: center; align-items: center; flex-direction: column;
@@ -107,21 +109,21 @@
     
     <div id="saveIndicator">Saved...</div>
     
-    <button id="btnSettings" class="top-btn" onpointerdown="openSettings()">⚙️</button>
-    <button id="btnMissions" class="top-btn" onpointerdown="openMissions()">📋</button>
-    <button id="btnSkills" class="top-btn" onpointerdown="openSkills()">🧬</button>
-    <button id="btnPrestige" onpointerdown="doPrestige()">✨ PRESTIGE ($1M)</button>
+    <button id="btnSettings" class="top-btn" onclick="openSettings()">⚙️</button>
+    <button id="btnMissions" class="top-btn" onclick="openMissions()">📋</button>
+    <button id="btnSkills" class="top-btn" onclick="openSkills()">🧬</button>
+    <button id="btnPrestige" onclick="doPrestige()">✨ PRESTIGE ($1M)</button>
 
     <div id="shop">
-        <button id="btnAuto" class="upgrade-btn" onpointerdown="buyUpgrade('auto')">
+        <button id="btnAuto" class="upgrade-btn" onclick="buyUpgrade('auto')">
             <span class="btn-title">🤖 Auto-Drop</span>
             <span class="btn-cost" id="costAuto">$100</span><span class="btn-level" id="lvlAuto">Lvl 0</span>
         </button>
-        <button id="btnMult" class="upgrade-btn" onpointerdown="buyUpgrade('mult')">
+        <button id="btnMult" class="upgrade-btn" onclick="buyUpgrade('mult')">
             <span class="btn-title">💎 Ball Value</span>
             <span class="btn-cost" id="costMult">$250</span><span class="btn-level" id="lvlMult">Lvl 1</span>
         </button>
-        <button id="btnBounce" class="upgrade-btn" onpointerdown="buyUpgrade('bounce')">
+        <button id="btnBounce" class="upgrade-btn" onclick="buyUpgrade('bounce')">
             <span class="btn-title">🏀 Bounciness</span>
             <span class="btn-cost" id="costBounce">$500</span><span class="btn-level" id="lvlBounce">Lvl 0</span>
         </button>
@@ -138,16 +140,16 @@
     <div id="settingsOverlay" class="modal-overlay">
         <div class="modal-box" style="border-color: #888;">
             <h2 style="color: #fff;">⚙️ Settings</h2>
-            <button id="btnMuteToggle" class="btn-close" onpointerdown="toggleMute()" style="font-size: 16px; padding: 15px; color: white; margin-bottom: 15px;">🔊 Audio: ON</button>
-            <button class="btn-danger" onpointerdown="hardReset()">⚠️ WIPE SAVE DATA</button>
-            <button class="btn-close" onpointerdown="closeModals()">Close</button>
+            <button id="btnMuteToggle" class="btn-close" onclick="toggleMute()" style="font-size: 16px; padding: 15px; color: white; margin-bottom: 15px;">🔊 Audio: ON</button>
+            <button class="btn-danger" onclick="hardReset()">⚠️ WIPE SAVE DATA</button>
+            <button class="btn-close" onclick="closeModals()">Close</button>
         </div>
     </div>
     <div id="missionsOverlay" class="modal-overlay">
         <div class="modal-box" style="border-color: #4caf50;">
             <h2 style="color: #4caf50;">📋 Missions</h2>
             <div id="missionList"></div>
-            <button class="btn-close" onpointerdown="closeModals()">Close</button>
+            <button class="btn-close" onclick="closeModals()">Close</button>
         </div>
     </div>
     <div id="skillsOverlay" class="modal-overlay">
@@ -155,20 +157,30 @@
             <h2 style="color: #e040fb;">🧬 Meta-Skills</h2>
             <p style="color: #e040fb; font-weight: bold; margin-top: -15px;">💎 <span id="modalShardCount">0</span> Shards</p>
             <div id="skillList"></div>
-            <button class="btn-close" onpointerdown="closeModals()">Close</button>
+            <button class="btn-close" onclick="closeModals()">Close</button>
         </div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
 
 <script>
+    // --- CRITICAL VARIABLES RE-ADDED ---
+    let width = window.innerWidth || 400; 
+    let height = window.innerHeight || 800; 
+    let isGamePaused = false; 
+    let isAudioMuted = false;
+
+    let balls = [], pegs = [], buckets = [], particles = [], floatingTexts = [];
+    const gravity = 0.2; 
+    const shopHeight = 100; 
+    let paddle = { x: width / 2, y: 100, width: 60, height: 10, vx: 4 };
+
     // --- TELEGRAM INIT & SAFE HAPTICS ---
     const tg = window.Telegram.WebApp;
     tg.expand();
 
     let lastHapticTime = 0;
     function haptic(style = 'light') {
-        // Safe check for desktop environments where impactOccurred doesn't exist
         if (tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
             let now = Date.now();
             if (now - lastHapticTime > 50) { 
@@ -178,7 +190,7 @@
         }
     }
 
-    // --- ADSGRAM SDK INTEGRATION ---
+    // --- SAFE ADSGRAM SDK INTEGRATION ---
     let AdController = null;
     if (window.Adsgram) { AdController = window.Adsgram.init({ blockId: "25014" }); }
 
@@ -234,11 +246,7 @@
     const modalDesc = document.getElementById('modalDesc'); const btnModalAd = document.getElementById('btnModalAd');
     const btnModalClaim = document.getElementById('btnModalClaim');
 
-    // Safe default dimensions so math doesn't crash on boot
-    let width = window.innerWidth || 400; 
-    let height = window.innerHeight || 800; 
-    let isGamePaused = false; let isAudioMuted = false;
-
+    // Economy & Stats
     let prestigeLevel = 0; const PRESTIGE_COST = 1000000; 
     const themes = [
         { name: "Classic", bg: "#111111", trail: "rgba(17, 17, 17, 0.35)", pegOff: "#444444", textMain: "#ffeb3b" },
@@ -269,7 +277,7 @@
     function getFeverDuration() { return 600 + (metaSkills.feverTime.level * 60); }
     function getMutationRate() { return 0.015 + (metaSkills.mutationRate.level * 0.01); }
 
-    const SAVE_KEY = 'asmrPachinkoSaveData_v12'; 
+    const SAVE_KEY = 'asmrPachinkoSaveData_v12'; // Safe fresh start
 
     let stats = { ballsDropped: 0, goldHit: 0, portalsHit: 0, feversTriggered: 0 };
     let activeMissions = []; let missionsCompleted = 0;
@@ -301,7 +309,7 @@
             let current = stats[m.type === 'gold' ? 'goldHit' : (m.type === 'portals' ? 'portalsHit' : (m.type === 'fever' ? 'feversTriggered' : 'ballsDropped'))];
             let progress = Math.min(100, (current / m.target) * 100); let isComplete = current >= m.target;
             let rewardAmount = m.rewardBase * prestigeMultiplier * baseHitValue;
-            missionList.innerHTML += `<div class="list-item"><div class="list-desc">${m.desc} - Reward: $${formatMoney(rewardAmount)}</div><div class="mission-progress"><div class="mission-fill" style="width: ${progress}%;"></div></div><button class="btn-claim" ${isComplete ? '' : 'disabled'} onpointerdown="claimMission(${index}, ${rewardAmount})">${isComplete ? 'Claim Reward' : Math.floor(progress) + '%'}</button></div>`;
+            missionList.innerHTML += `<div class="list-item"><div class="list-desc">${m.desc} - Reward: $${formatMoney(rewardAmount)}</div><div class="mission-progress"><div class="mission-fill" style="width: ${progress}%;"></div></div><button class="btn-claim" ${isComplete ? '' : 'disabled'} onclick="claimMission(${index}, ${rewardAmount})">${isComplete ? 'Claim Reward' : Math.floor(progress) + '%'}</button></div>`;
         });
     }
 
@@ -316,7 +324,7 @@
         skillList.innerHTML = ''; modalShardCount.innerText = neonShards;
         for (let key in metaSkills) {
             let s = metaSkills[key]; let isMaxed = s.level >= s.max; let canAfford = neonShards >= s.cost && !isMaxed;
-            skillList.innerHTML += `<div class="list-item"><div class="list-desc" style="color: #e040fb; font-weight: bold;">${s.name} (Lvl ${s.level}/${s.max})</div><div style="font-size: 12px; color: #aaa; margin-bottom: 5px;">${s.desc}</div><button class="btn-skill" ${canAfford ? '' : 'disabled'} onpointerdown="buySkill('${key}')">${isMaxed ? 'MAXED' : 'Upgrade: 💎 ' + s.cost}</button></div>`;
+            skillList.innerHTML += `<div class="list-item"><div class="list-desc" style="color: #e040fb; font-weight: bold;">${s.name} (Lvl ${s.level}/${s.max})</div><div style="font-size: 12px; color: #aaa; margin-bottom: 5px;">${s.desc}</div><button class="btn-skill" ${canAfford ? '' : 'disabled'} onclick="buySkill('${key}')">${isMaxed ? 'MAXED' : 'Upgrade: 💎 ' + s.cost}</button></div>`;
         }
     }
 
@@ -331,9 +339,7 @@
     function applyThemeColors() {
         document.body.style.backgroundColor = currentTheme.bg; titleText.style.color = currentTheme.textMain; titleText.style.textShadow = `0 0 10px ${currentTheme.textMain}`;
         multiplierText.innerText = `Multiplier: x${prestigeMultiplier} (${currentTheme.name})`;
-        if(tg && tg.setHeaderColor) {
-            try { tg.setHeaderColor(currentTheme.bg); } catch(e){} // Safe wrapper for desktop fallback
-        }
+        if(tg && tg.setHeaderColor) { try { tg.setHeaderColor(currentTheme.bg); } catch(e){} }
     }
 
     function updateUI() {
@@ -400,9 +406,9 @@
 
     setInterval(saveGame, 5000);
 
-    function openSettings() { haptic('light'); isGamePaused = true; settingsOverlay.style.display = 'flex'; }
-    function openMissions() { haptic('light'); renderMissions(); isGamePaused = true; missionsOverlay.style.display = 'flex'; }
-    function openSkills() { haptic('light'); renderSkills(); isGamePaused = true; skillsOverlay.style.display = 'flex'; }
+    window.openSettings = function() { haptic('light'); isGamePaused = true; settingsOverlay.style.display = 'flex'; }
+    window.openMissions = function() { haptic('light'); renderMissions(); isGamePaused = true; missionsOverlay.style.display = 'flex'; }
+    window.openSkills = function() { haptic('light'); renderSkills(); isGamePaused = true; skillsOverlay.style.display = 'flex'; }
     window.closeModals = function() { haptic('light'); settingsOverlay.style.display = 'none'; missionsOverlay.style.display = 'none'; skillsOverlay.style.display = 'none'; modalOverlay.style.display = 'none'; isGamePaused = false; saveGame(); checkMissions(); }
     window.toggleMute = function() { haptic('light'); isAudioMuted = !isAudioMuted; btnMuteToggle.innerText = isAudioMuted ? "🔇 Audio: OFF" : "🔊 Audio: ON"; if (isAudioMuted && audioCtx) audioCtx.suspend(); else if (!isAudioMuted && audioCtx) audioCtx.resume(); }
     window.hardReset = function() { haptic('rigid'); if (confirm("⚠️ WARNING: DELETE ALL SAVE DATA?")) { localStorage.removeItem(SAVE_KEY); location.reload(); } }
@@ -411,16 +417,16 @@
         isGamePaused = true; modalOverlay.style.display = 'flex'; modalTitle.innerText = "Welcome Back!";
         modalDesc.innerText = `Auto-droppers earned $${formatMoney(amount)} while away.`;
         btnModalAd.innerText = `Watch Ad for 3x ($${formatMoney(amount * 3)})`; btnModalClaim.innerText = `Claim Normal ($${formatMoney(amount)})`;
-        btnModalAd.onpointerdown = () => { haptic('light'); AdManager.showRewardedVideo("3x Offline Earnings", () => { money += (amount * 3); updateUI(); saveGame(); closeModals(); }, () => { closeModals(); }); };
-        btnModalClaim.onpointerdown = () => { haptic('light'); money += amount; updateUI(); saveGame(); closeModals(); };
+        btnModalAd.onclick = () => { haptic('light'); AdManager.showRewardedVideo("3x Offline Earnings", () => { money += (amount * 3); updateUI(); saveGame(); closeModals(); }, () => { closeModals(); }); };
+        btnModalClaim.onclick = () => { haptic('light'); money += amount; updateUI(); saveGame(); closeModals(); };
     }
 
     function showGoblinModal() {
         isGamePaused = true; modalOverlay.style.display = 'flex'; modalTitle.innerText = "Loot Goblin Caught!";
         let goblinBounty = 500 * prestigeMultiplier * baseHitValue; modalDesc.innerText = `The goblin drops $${formatMoney(goblinBounty)}. Watch an ad to trigger INSTANT FEVER MODE!`;
         btnModalAd.innerText = `Watch Ad for FEVER + $${formatMoney(goblinBounty)}`; btnModalClaim.innerText = `Just take $${formatMoney(goblinBounty)}`;
-        btnModalAd.onpointerdown = () => { haptic('light'); AdManager.showRewardedVideo("Goblin Fever", () => { haptic('heavy'); money += goblinBounty; stats.feversTriggered++; checkMissions(); feverActive = true; feverFramesLeft = getFeverDuration(); feverCharge = MAX_FEVER; shakeAmount = 30; playFeverChord(); updateUI(); closeModals(); }, () => { closeModals(); }); };
-        btnModalClaim.onpointerdown = () => { haptic('light'); money += goblinBounty; updateUI(); closeModals(); };
+        btnModalAd.onclick = () => { haptic('light'); AdManager.showRewardedVideo("Goblin Fever", () => { haptic('heavy'); money += goblinBounty; stats.feversTriggered++; checkMissions(); feverActive = true; feverFramesLeft = getFeverDuration(); feverCharge = MAX_FEVER; shakeAmount = 30; playFeverChord(); updateUI(); closeModals(); }, () => { closeModals(); }); };
+        btnModalClaim.onclick = () => { haptic('light'); money += goblinBounty; updateUI(); closeModals(); };
     }
 
     window.doPrestige = function() {
@@ -460,14 +466,13 @@
             this.vy += gravity; this.x += this.vx; this.y += this.vy; 
             if (this.x - this.r < 0) { this.x = this.r; this.vx *= -bounceFactor; } 
             if (this.x + this.r > width) { this.x = width - this.r; this.vx *= -bounceFactor; } 
+            if (isNaN(this.x) || isNaN(this.y)) { this.x = -1000; this.y = height + 1000; this.vx = 0; this.vy = 0; }
         } 
         draw() { if (this.combo > 5 || feverActive) { ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 4, 0, Math.PI * 2); ctx.fillStyle = feverActive ? `hsla(${Math.random()*360}, 100%, 50%, 0.5)` : "rgba(255, 255, 255, 0.5)"; ctx.fill(); ctx.closePath(); } ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fillStyle = this.combo > 5 || feverActive ? '#fff' : this.color; ctx.fill(); ctx.closePath(); } 
     }
 
-    let paddle = { x: width/2, y: 100, width: 60, height: 10, vx: 4 }; // Initialize safe default
-
     function initBoard() {
-        if(width <= 0 || height <= 0) return; // Prevent bad board generation
+        if(width <= 0 || height <= 0) return;
         pegs = []; buckets = []; const rows = 10; const cols = 8; const spacingX = width / cols; const boardHeight = height - shopHeight - 80; const spacingY = boardHeight * 0.8 / rows; const startY = height * 0.2;
         paddle.y = height * 0.12; paddle.x = width / 2; paddle.width = Math.max(40, width * 0.1);
         for (let r = 0; r < rows; r++) { const offset = (r % 2 === 0) ? spacingX / 2 : 0; for (let c = 0; c < cols; c++) { pegs.push({ x: c * spacingX + offset + spacingX / 2, y: startY + r * spacingY, radius: Math.min(width, height) * 0.012, flashTimer: 0, type: 0, pulse: Math.random() * Math.PI * 2 }); } }
@@ -478,12 +483,7 @@
     function resizeCanvas() { 
         width = window.innerWidth || document.documentElement.clientWidth; 
         height = window.innerHeight || document.documentElement.clientHeight; 
-        // --- DIMENSION BOOT FIX ---
-        // Force wait if TMA passes a 0x0 window at boot
-        if (width === 0 || height === 0) {
-            setTimeout(resizeCanvas, 50);
-            return;
-        }
+        if (width === 0 || height === 0) { setTimeout(resizeCanvas, 50); return; }
         canvas.width = width; canvas.height = height; 
         initBoard(); 
     }
@@ -553,8 +553,6 @@
     }
 
     function gameLoop(timestamp) {
-        // --- LOOP GUARD ---
-        // Prevent game loop from executing if width/height are still 0 on TMA Boot
         if (width === 0 || height === 0) { requestAnimationFrame(gameLoop); return; }
         if (AdManager.isAdPlaying || isGamePaused) { requestAnimationFrame(gameLoop); return; }
 
@@ -617,14 +615,9 @@
             for (let i = particles.length - 1; i >= 0; i--) { particles[i].update(); particles[i].draw(); if (particles[i].life <= 0) particles.splice(i, 1); }
             for (let i = floatingTexts.length - 1; i >= 0; i--) { floatingTexts[i].update(); floatingTexts[i].draw(); if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1); }
 
-            resolveCollisions(); 
-            ctx.restore(); 
-            drawFeverBar(); 
-            updateUI(); 
+            resolveCollisions(); ctx.restore(); drawFeverBar(); updateUI(); 
 
         } catch(e) {
-            // --- ON-SCREEN ERROR LOGGER ---
-            // If the game ever breaks again, it will print the exact reason to your screen instead of going black!
             ctx.restore(); 
             ctx.fillStyle = "red"; ctx.fillRect(0,0,width,height);
             ctx.fillStyle = "white"; ctx.font = "16px sans-serif"; ctx.textAlign = "left";
@@ -651,8 +644,7 @@
 
     window.addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) triggerDrop(); } });
 
-    tg.ready();
-    loadGame(); resizeCanvas(); updateUI(); requestAnimationFrame(gameLoop);
+    tg.ready(); loadGame(); resizeCanvas(); updateUI(); requestAnimationFrame(gameLoop);
 
 </script>
 </body>
