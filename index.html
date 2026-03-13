@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ASMR Pachinko Idle - Stable TMA</title>
+    <title>ASMR Pachinko Idle - Bulletproof TMA</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
 
     <style>
         body {
-            margin: 0; padding: 0; background-color: #111; overflow: hidden;
+            margin: 0; padding: 0; background-color: #111111; overflow: hidden;
             color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             touch-action: none; user-select: none; transition: background-color 1s ease;
         }
-        canvas { display: block; }
+        canvas { display: block; width: 100vw; height: 100vh; }
         
         #header { position: absolute; top: 15px; left: 15px; pointer-events: none; z-index: 10;}
         h1 { margin: 0; font-size: 28px; color: #ffeb3b; text-shadow: 0 0 10px #ffeb3b; transition: color 1s; }
@@ -162,19 +162,23 @@
     <canvas id="gameCanvas"></canvas>
 
 <script>
-    // --- TELEGRAM INIT & HAPTICS (THROTTLED) ---
+    // --- TELEGRAM INIT & SAFE HAPTICS ---
     const tg = window.Telegram.WebApp;
     tg.expand();
 
     let lastHapticTime = 0;
     function haptic(style = 'light') {
-        if (tg.HapticFeedback) {
+        // Safe check for desktop environments where impactOccurred doesn't exist
+        if (tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
             let now = Date.now();
-            if (now - lastHapticTime > 50) { tg.HapticFeedback.impactOccurred(style); lastHapticTime = now; }
+            if (now - lastHapticTime > 50) { 
+                try { tg.HapticFeedback.impactOccurred(style); } catch(e){} 
+                lastHapticTime = now; 
+            }
         }
     }
 
-    // --- SAFE ADSGRAM SDK INTEGRATION ---
+    // --- ADSGRAM SDK INTEGRATION ---
     let AdController = null;
     if (window.Adsgram) { AdController = window.Adsgram.init({ blockId: "25014" }); }
 
@@ -230,11 +234,14 @@
     const modalDesc = document.getElementById('modalDesc'); const btnModalAd = document.getElementById('btnModalAd');
     const btnModalClaim = document.getElementById('btnModalClaim');
 
-    let width, height; let isGamePaused = false; let isAudioMuted = false;
+    // Safe default dimensions so math doesn't crash on boot
+    let width = window.innerWidth || 400; 
+    let height = window.innerHeight || 800; 
+    let isGamePaused = false; let isAudioMuted = false;
 
     let prestigeLevel = 0; const PRESTIGE_COST = 1000000; 
     const themes = [
-        { name: "Classic", bg: "#111", trail: "rgba(17, 17, 17, 0.35)", pegOff: "#444", textMain: "#ffeb3b" },
+        { name: "Classic", bg: "#111111", trail: "rgba(17, 17, 17, 0.35)", pegOff: "#444444", textMain: "#ffeb3b" },
         { name: "Cyberpunk", bg: "#050510", trail: "rgba(5, 5, 16, 0.35)", pegOff: "#0b3d60", textMain: "#00ffff" },
         { name: "Inferno", bg: "#1a0000", trail: "rgba(26, 0, 0, 0.35)", pegOff: "#4a1500", textMain: "#ff5722" },
         { name: "Radiant", bg: "#101510", trail: "rgba(16, 21, 16, 0.35)", pegOff: "#1b4d22", textMain: "#55ff55" }
@@ -262,7 +269,7 @@
     function getFeverDuration() { return 600 + (metaSkills.feverTime.level * 60); }
     function getMutationRate() { return 0.015 + (metaSkills.mutationRate.level * 0.01); }
 
-    const SAVE_KEY = 'asmrPachinkoSaveData_v11'; 
+    const SAVE_KEY = 'asmrPachinkoSaveData_v12'; 
 
     let stats = { ballsDropped: 0, goldHit: 0, portalsHit: 0, feversTriggered: 0 };
     let activeMissions = []; let missionsCompleted = 0;
@@ -324,7 +331,9 @@
     function applyThemeColors() {
         document.body.style.backgroundColor = currentTheme.bg; titleText.style.color = currentTheme.textMain; titleText.style.textShadow = `0 0 10px ${currentTheme.textMain}`;
         multiplierText.innerText = `Multiplier: x${prestigeMultiplier} (${currentTheme.name})`;
-        if(tg && tg.setHeaderColor) tg.setHeaderColor(currentTheme.bg);
+        if(tg && tg.setHeaderColor) {
+            try { tg.setHeaderColor(currentTheme.bg); } catch(e){} // Safe wrapper for desktop fallback
+        }
     }
 
     function updateUI() {
@@ -451,17 +460,14 @@
             this.vy += gravity; this.x += this.vx; this.y += this.vy; 
             if (this.x - this.r < 0) { this.x = this.r; this.vx *= -bounceFactor; } 
             if (this.x + this.r > width) { this.x = width - this.r; this.vx *= -bounceFactor; } 
-            // --- PHYSICS FLAW FIX ---
-            // Instead of leaving the X coordinate as NaN (which permanently crashes the draw loop),
-            // we safely snap the ball to valid coordinates far off-screen so the array can delete it normally.
-            if (isNaN(this.x) || isNaN(this.y)) { 
-                this.x = -1000; this.y = height + 1000; this.vx = 0; this.vy = 0; 
-            }
         } 
         draw() { if (this.combo > 5 || feverActive) { ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 4, 0, Math.PI * 2); ctx.fillStyle = feverActive ? `hsla(${Math.random()*360}, 100%, 50%, 0.5)` : "rgba(255, 255, 255, 0.5)"; ctx.fill(); ctx.closePath(); } ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2); ctx.fillStyle = this.combo > 5 || feverActive ? '#fff' : this.color; ctx.fill(); ctx.closePath(); } 
     }
 
+    let paddle = { x: width/2, y: 100, width: 60, height: 10, vx: 4 }; // Initialize safe default
+
     function initBoard() {
+        if(width <= 0 || height <= 0) return; // Prevent bad board generation
         pegs = []; buckets = []; const rows = 10; const cols = 8; const spacingX = width / cols; const boardHeight = height - shopHeight - 80; const spacingY = boardHeight * 0.8 / rows; const startY = height * 0.2;
         paddle.y = height * 0.12; paddle.x = width / 2; paddle.width = Math.max(40, width * 0.1);
         for (let r = 0; r < rows; r++) { const offset = (r % 2 === 0) ? spacingX / 2 : 0; for (let c = 0; c < cols; c++) { pegs.push({ x: c * spacingX + offset + spacingX / 2, y: startY + r * spacingY, radius: Math.min(width, height) * 0.012, flashTimer: 0, type: 0, pulse: Math.random() * Math.PI * 2 }); } }
@@ -469,7 +475,18 @@
         for (let i = 0; i < 5; i++) { buckets.push({ x: i * bucketWidth, y: bucketY, w: bucketWidth, h: 40, mult: bucketMultipliers[i], color: bucketMultipliers[i] === 5 ? '#ffeb3b' : (bucketMultipliers[i] === 3 ? '#4fc3f7' : '#888'), flashTimer: 0 }); }
     }
 
-    function resizeCanvas() { width = window.innerWidth; height = window.innerHeight; canvas.width = width; canvas.height = height; initBoard(); }
+    function resizeCanvas() { 
+        width = window.innerWidth || document.documentElement.clientWidth; 
+        height = window.innerHeight || document.documentElement.clientHeight; 
+        // --- DIMENSION BOOT FIX ---
+        // Force wait if TMA passes a 0x0 window at boot
+        if (width === 0 || height === 0) {
+            setTimeout(resizeCanvas, 50);
+            return;
+        }
+        canvas.width = width; canvas.height = height; 
+        initBoard(); 
+    }
     window.addEventListener('resize', resizeCanvas);
 
     function drawFeverBar() {
@@ -536,6 +553,9 @@
     }
 
     function gameLoop(timestamp) {
+        // --- LOOP GUARD ---
+        // Prevent game loop from executing if width/height are still 0 on TMA Boot
+        if (width === 0 || height === 0) { requestAnimationFrame(gameLoop); return; }
         if (AdManager.isAdPlaying || isGamePaused) { requestAnimationFrame(gameLoop); return; }
 
         try {
@@ -591,7 +611,6 @@
                 if (goblin.x < -100 || goblin.x > width + 100) { goblin.active = false; lastGoblinSpawnTime = Date.now(); }
             }
             
-            // Clean out broken balls natively
             balls = balls.filter(b => !isNaN(b.x) && !isNaN(b.y));
 
             for (let b of balls) { b.update(); b.draw(); }
@@ -602,16 +621,22 @@
             ctx.restore(); 
             drawFeverBar(); 
             updateUI(); 
+
         } catch(e) {
-            console.error("Game Loop Error caught and suppressed:", e);
+            // --- ON-SCREEN ERROR LOGGER ---
+            // If the game ever breaks again, it will print the exact reason to your screen instead of going black!
             ctx.restore(); 
+            ctx.fillStyle = "red"; ctx.fillRect(0,0,width,height);
+            ctx.fillStyle = "white"; ctx.font = "16px sans-serif"; ctx.textAlign = "left";
+            ctx.fillText("CRASH PREVENTED. ERR: " + e.message, 20, 100);
+            console.error("Game Loop Error:", e);
         }
         
         requestAnimationFrame(gameLoop);
     }
 
     function triggerDrop() {
-        if (isGamePaused || AdManager.isAdPlaying) return;
+        if (isGamePaused || AdManager.isAdPlaying || width === 0) return;
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (!isAudioMuted && audioCtx.state === 'suspended') audioCtx.resume();
         let currentMaxBalls = feverActive ? getMaxBalls() * 2 : getMaxBalls();
