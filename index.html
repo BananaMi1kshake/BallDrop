@@ -3,78 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ASMR Pachinko Idle - Telegram Pro</title>
+    <title>ASMR Pachinko - Fixed Edition</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
     <script src="https://sad.adsgram.ai/js/adsgram-ad-sdk.js"></script>
 
     <style>
         body {
             margin: 0; padding: 0; background-color: #111; overflow: hidden;
-            color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            touch-action: none; user-select: none; transition: background-color 1s ease;
+            color: white; font-family: 'Segoe UI', sans-serif;
+            touch-action: none; user-select: none;
         }
         canvas { display: block; }
-        
         #header { position: absolute; top: 15px; left: 15px; pointer-events: none; z-index: 10;}
-        h1 { margin: 0; font-size: 28px; color: #ffeb3b; text-shadow: 0 0 10px #ffeb3b; transition: color 1s; }
-        p { margin: 5px 0 0 0; color: #aaa; font-size: 14px; }
-        #multiplierText { font-size: 16px; color: #4fc3f7; display: block; margin-top: 5px; font-weight: bold;}
-        #shardText { font-size: 16px; color: #e040fb; display: none; margin-top: 5px; font-weight: bold; text-shadow: 0 0 8px #e040fb;}
-        
+        h1 { margin: 0; font-size: 28px; color: #ffeb3b; text-shadow: 0 0 10px #ffeb3b; }
+        #multiplierText { font-size: 14px; color: #4fc3f7; font-weight: bold; }
         #saveIndicator {
             position: absolute; top: 15px; right: 15px; font-size: 12px; color: #4caf50;
-            opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 15;
+            opacity: 0; transition: opacity 0.5s; z-index: 15;
         }
-
-        .top-btn {
-            position: absolute; top: 15px; z-index: 20;
-            background: transparent; border: none; font-size: 24px; cursor: pointer;
-            transition: transform 0.3s; padding: 0; text-shadow: 0 0 5px rgba(255,255,255,0.5);
-        }
-        #btnSettings { right: 15px; } #btnSettings:hover { transform: rotate(90deg); }
-        #btnMissions { right: 55px; } #btnMissions:hover { transform: scale(1.1); }
-        #btnSkills { right: 95px; display: none; } #btnSkills:hover { transform: scale(1.1); }
-        
-        .notify-pulse { animation: greenPulse 1s infinite alternate; }
-        @keyframes greenPulse { from { text-shadow: 0 0 5px #0f0; transform: scale(1); } to { text-shadow: 0 0 20px #0f0; transform: scale(1.15); } }
-
-        #btnPrestige {
-            position: absolute; top: 55px; right: 15px; z-index: 20;
-            background: linear-gradient(45deg, #ff007f, #7f00ff); border: 2px solid #fff; border-radius: 8px; color: white;
-            padding: 8px 12px; font-weight: bold; cursor: pointer; box-shadow: 0 0 15px rgba(255, 0, 127, 0.5);
-            display: none; animation: pulse 1.5s infinite alternate;
-        }
-        @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.05); } }
-
         #shop {
             position: absolute; bottom: 0; left: 0; width: 100%; height: 100px;
-            background: rgba(10, 10, 10, 0.95); backdrop-filter: blur(5px);
-            display: flex; justify-content: space-around; padding: 10px 5px;
-            box-sizing: border-box; border-top: 1px solid #333; z-index: 10;
+            background: rgba(10, 10, 10, 0.95); display: flex; justify-content: space-around; 
+            padding: 10px 5px; box-sizing: border-box; border-top: 1px solid #333; z-index: 10;
         }
-        
         .upgrade-btn {
             flex: 1; margin: 0 5px; padding: 8px; background: #222; border: 2px solid #444; border-radius: 8px;
             color: white; font-weight: bold; text-align: center; cursor: pointer; transition: 0.2s;
         }
-        .upgrade-btn:disabled { opacity: 0.4; border-color: #111; cursor: not-allowed; }
-        .btn-title { display: block; font-size: 13px; margin-bottom: 2px; color: #4fc3f7; }
-        .btn-cost { display: block; font-size: 16px; color: #ffeb3b; }
-        .btn-level { display: block; font-size: 11px; color: #888; margin-top: 3px; }
-
+        .upgrade-btn:disabled { opacity: 0.4; border-color: #111; }
+        .btn-title { display: block; font-size: 12px; color: #4fc3f7; }
+        .btn-cost { display: block; font-size: 15px; color: #ffeb3b; }
+        .btn-level { display: block; font-size: 11px; color: #888; }
         .modal-overlay {
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); z-index: 100; justify-content: center; align-items: center; flex-direction: column;
         }
         .modal-box {
             background: #1a1a24; border: 2px solid #4fc3f7; border-radius: 12px; padding: 25px;
-            text-align: center; box-shadow: 0 0 30px rgba(79, 195, 247, 0.4); max-width: 80%; width: 320px;
+            text-align: center; max-width: 80%; width: 300px;
         }
-        .btn-ad { display: block; width: 100%; background: linear-gradient(45deg, #ff007f, #7f00ff); color: white; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 15px; font-weight: bold; font-size: 16px; }
-        .btn-close { display: block; width: 100%; background: #444; color: #aaa; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; margin-top: 10px; }
-        .list-item { background: #222; border: 1px solid #555; border-radius: 8px; padding: 10px; margin-bottom: 10px; text-align: left; }
     </style>
 </head>
 <body>
@@ -82,17 +50,9 @@
     <div id="header">
         <h1 id="titleText">$<span id="moneyText">0</span></h1>
         <span id="multiplierText">Multiplier: x1</span>
-        <span id="shardText">💎 <span id="shardCount">0</span> Shards</span>
-        <p>Tap to drop!</p>
     </div>
+    <div id="saveIndicator">Saved</div>
     
-    <div id="saveIndicator">Cloud Saved</div>
-    
-    <button id="btnSettings" class="top-btn" onpointerdown="openSettings()">⚙️</button>
-    <button id="btnMissions" class="top-btn" onpointerdown="openMissions()">📋</button>
-    <button id="btnSkills" class="top-btn" onpointerdown="openSkills()">🧬</button>
-    <button id="btnPrestige" onpointerdown="doPrestige()">✨ PRESTIGE ($1M)</button>
-
     <div id="shop">
         <button id="btnAuto" class="upgrade-btn" onpointerdown="buyUpgrade('auto')">
             <span class="btn-title">🤖 Auto-Drop</span>
@@ -108,41 +68,6 @@
         </button>
     </div>
 
-    <div id="modalOverlay" class="modal-overlay">
-        <div class="modal-box">
-            <h2 id="modalTitle">Reward</h2>
-            <p id="modalDesc">Details here.</p>
-            <button id="btnModalAd" class="btn-ad">Watch Ad</button>
-            <button id="btnModalClaim" class="btn-close">No Thanks</button>
-        </div>
-    </div>
-
-    <div id="settingsOverlay" class="modal-overlay">
-        <div class="modal-box">
-            <h2>⚙️ Settings</h2>
-            <button id="btnMuteToggle" class="btn-close" onpointerdown="toggleMute()" style="color: white; margin-bottom: 15px;">🔊 Audio: ON</button>
-            <button style="background:#cc0000; color:white; border:none; padding:10px; width:100%; border-radius:8px;" onpointerdown="hardReset()">⚠️ WIPE SAVE</button>
-            <button class="btn-close" onpointerdown="closeModals()">Close</button>
-        </div>
-    </div>
-
-    <div id="missionsOverlay" class="modal-overlay">
-        <div class="modal-box">
-            <h2 style="color: #4caf50;">📋 Missions</h2>
-            <div id="missionList"></div>
-            <button class="btn-close" onpointerdown="closeModals()">Close</button>
-        </div>
-    </div>
-
-    <div id="skillsOverlay" class="modal-overlay">
-        <div class="modal-box">
-            <h2 style="color: #e040fb;">🧬 Meta-Skills</h2>
-            <p style="color: #e040fb; font-weight: bold;">💎 <span id="modalShardCount">0</span> Shards</p>
-            <div id="skillList"></div>
-            <button class="btn-close" onpointerdown="closeModals()">Close</button>
-        </div>
-    </div>
-
     <canvas id="gameCanvas"></canvas>
 
 <script>
@@ -150,7 +75,7 @@
     tg.expand();
     tg.ready();
 
-    // --- ADSGRAM LAZY LOAD FIX ---
+    // --- ADSGRAM ---
     let AdController = null;
     function getAdController() {
         if (AdController) return AdController;
@@ -161,187 +86,186 @@
         return null;
     }
 
-    const AdManager = {
-        isAdPlaying: false,
-        showRewardedVideo: async function(rewardName, onSuccess, onFail) {
-            const controller = getAdController();
-            if (!controller) {
-                // If not in Telegram or SDK failed, just give reward for testing
-                // Remove the "confirm" line below before final production build
-                if(confirm("SDK Missing. Test Reward?")) onSuccess(); 
-                return;
-            }
-
-            this.isAdPlaying = true;
-            if(audioCtx) audioCtx.suspend(); 
-            
-            try {
-                const result = await controller.show();
-                if (result.done) onSuccess(); 
-                else if(onFail) onFail();
-            } catch (e) {
-                console.error("Adsgram Error:", e);
-                if(onFail) onFail();
-            } finally {
-                this.isAdPlaying = false;
-                if(!isAudioMuted && audioCtx) audioCtx.resume();
-            }
-        },
-        showInterstitial: async function(onClose) {
-            await this.showRewardedVideo("Inter", onClose, onClose);
-        }
-    };
-
-    const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
-    const moneyText = document.getElementById('moneyText'); const btnPrestige = document.getElementById('btnPrestige');
-    const titleText = document.getElementById('titleText'); const multiplierText = document.getElementById('multiplierText');
-    const saveIndicator = document.getElementById('saveIndicator');
-    
-    const modalOverlay = document.getElementById('modalOverlay'); const settingsOverlay = document.getElementById('settingsOverlay');
-    const missionsOverlay = document.getElementById('missionsOverlay'); const missionList = document.getElementById('missionList');
-    const skillsOverlay = document.getElementById('skillsOverlay'); const skillList = document.getElementById('skillList');
-
-    let width, height; let isGamePaused = false; let isAudioMuted = false;
-    let prestigeLevel = 0; let money = 0; let prestigeMultiplier = 1; let neonShards = 0;
-
-    const themes = [
-        { bg: "#111", pegOff: "#444", textMain: "#ffeb3b" },
-        { bg: "#050510", pegOff: "#0b3d60", textMain: "#00ffff" },
-        { bg: "#1a0000", pegOff: "#4a1500", textMain: "#ff5722" }
-    ];
-    let currentTheme = themes[0];
-
+    // --- GAME STATE ---
+    let money = 0;
     const upgrades = {
-        auto: { level: 0, baseCost: 100, costMult: 2.5 },
-        mult: { level: 1, baseCost: 250, costMult: 2.0 },
-        bounce: { level: 0, baseCost: 500, costMult: 3.0 }
+        auto: { level: 0, base: 100, mult: 2.5 },
+        mult: { level: 1, base: 250, mult: 2.0 },
+        bounce: { level: 0, base: 500, mult: 3.0 }
     };
 
-    const metaSkills = {
-        maxBalls: { level: 0, max: 10, cost: 1, name: "Max Balls" },
-        feverTime: { level: 0, max: 10, cost: 1, name: "Fever Power" },
-        mutationRate: { level: 0, max: 10, cost: 2, name: "Lucky Spawn" }
-    };
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, balls = [], pegs = [], buckets = [];
+    const gravity = 0.25;
 
-    let baseHitValue = 1; let bounceFactor = 0.5; let feverCharge = 0; let feverActive = false;
-    let stats = { ballsDropped: 0, goldHit: 0, portalsHit: 0, feversTriggered: 0 };
-    let activeMissions = []; let missionsCompleted = 0;
-
-    function formatMoney(num) {
-        if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
-        if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
-        return Math.floor(num).toString();
+    // --- CORE LOGIC ---
+    function getCost(type) {
+        let u = upgrades[type];
+        // Note: 'mult' starts at lvl 1, others at 0. 
+        // We subtract the start level so the first purchase is the 'base' price.
+        let startLvl = (type === 'mult') ? 1 : 0;
+        return Math.floor(u.base * Math.pow(u.mult, u.level - startLvl));
     }
 
+    function buyUpgrade(type) {
+        let cost = getCost(type);
+        if (type === 'bounce' && upgrades.bounce.level >= 5) return; // Cap bounciness
+        
+        if (money >= cost) {
+            money -= cost;
+            upgrades[type].level++; // THIS INCREMENTS THE LEVEL
+            
+            // Apply effects immediately
+            if (type === 'bounce') bounceFactor = Math.min(0.85, 0.4 + (upgrades.bounce.level * 0.08));
+            
+            tg.HapticFeedback.notificationOccurred('success');
+            updateUI();
+            saveGame();
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('moneyText').innerText = formatMoney(money);
+        
+        // Update Auto
+        document.getElementById('lvlAuto').innerText = "Lvl " + upgrades.auto.level;
+        document.getElementById('costAuto').innerText = "$" + formatMoney(getCost('auto'));
+        document.getElementById('btnAuto').disabled = (money < getCost('auto'));
+
+        // Update Mult
+        document.getElementById('lvlMult').innerText = "Lvl " + upgrades.mult.level;
+        document.getElementById('costMult').innerText = "$" + formatMoney(getCost('mult'));
+        document.getElementById('btnMult').disabled = (money < getCost('mult'));
+
+        // Update Bounce
+        if(upgrades.bounce.level >= 5) {
+            document.getElementById('costBounce').innerText = "MAX";
+            document.getElementById('btnBounce').disabled = true;
+        } else {
+            document.getElementById('lvlBounce').innerText = "Lvl " + upgrades.bounce.level;
+            document.getElementById('costBounce').innerText = "$" + formatMoney(getCost('bounce'));
+            document.getElementById('btnBounce').disabled = (money < getCost('bounce'));
+        }
+    }
+
+    function formatMoney(n) {
+        if (n >= 1e6) return (n/1e6).toFixed(2) + "M";
+        if (n >= 1e3) return (n/1e3).toFixed(1) + "k";
+        return Math.floor(n);
+    }
+
+    // --- SAVING ---
     function saveGame() {
-        const data = { money, prestigeLevel, neonShards, stats, missionsCompleted, upgrades: { auto: upgrades.auto.level, mult: upgrades.mult.level, bounce: upgrades.bounce.level }, meta: { max: metaSkills.maxBalls.level, fever: metaSkills.feverTime.level, mut: metaSkills.mutationRate.level }};
-        tg.CloudStorage.setItem('pachinko_save', JSON.stringify(data), (err, success) => {
-            if(success) { saveIndicator.style.opacity = 1; setTimeout(() => saveIndicator.style.opacity = 0, 1000); }
+        const data = {
+            m: money,
+            al: upgrades.auto.level,
+            ml: upgrades.mult.level,
+            bl: upgrades.bounce.level
+        };
+        tg.CloudStorage.setItem('asmr_pachinko_v2', JSON.stringify(data), (err, ok) => {
+            if(ok) {
+                const ind = document.getElementById('saveIndicator');
+                ind.style.opacity = 1; setTimeout(() => ind.style.opacity = 0, 1000);
+            }
         });
     }
 
     function loadGame() {
-        tg.CloudStorage.getItem('pachinko_save', (err, val) => {
+        tg.CloudStorage.getItem('asmr_pachinko_v2', (err, val) => {
             if(val) {
                 const s = JSON.parse(val);
-                money = s.money || 0; prestigeLevel = s.prestigeLevel || 0; neonShards = s.neonShards || 0;
-                upgrades.auto.level = s.upgrades.auto; upgrades.mult.level = s.upgrades.mult; upgrades.bounce.level = s.upgrades.bounce;
-                baseHitValue = upgrades.mult.level; bounceFactor = 0.5 + (upgrades.bounce.level * 0.07);
+                money = s.m || 0;
+                upgrades.auto.level = s.al || 0;
+                upgrades.mult.level = s.ml || 1;
+                upgrades.bounce.level = s.bl || 0;
+                bounceFactor = Math.min(0.85, 0.4 + (upgrades.bounce.level * 0.08));
             }
-            initBoard(); updateUI();
+            initBoard();
+            updateUI();
         });
     }
 
-    function updateUI() {
-        moneyText.innerText = formatMoney(money);
-        document.getElementById('costAuto').innerText = "$" + formatMoney(100 * Math.pow(2.5, upgrades.auto.level));
-        document.getElementById('costMult').innerText = "$" + formatMoney(250 * Math.pow(2.0, upgrades.mult.level - 1));
-        document.getElementById('costBounce').innerText = upgrades.bounce.level >= 4 ? "MAX" : "$" + formatMoney(500 * Math.pow(3.0, upgrades.bounce.level));
-    }
-
-    // --- GAME ENGINE ---
-    let balls = [], pegs = [], buckets = [], floatingTexts = [];
-    const gravity = 0.2; const paddle = { x: 0, y: 0, width: 60, height: 10, vx: 4 };
-
+    // --- PHYSICS & RENDER ---
+    let bounceFactor = 0.4;
     class Ball {
-        constructor(x, y) { this.x = x; this.y = y; this.vx = (Math.random()-0.5)*4; this.vy = 2; this.r = 6; this.color = "#4fc3f7"; this.combo = 0; }
-        update() { this.vy += gravity; this.x += this.vx; this.y += this.vy; if(this.x<0 || this.x>width) this.vx *= -0.6; }
-        draw() { ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI*2); ctx.fillStyle = this.color; ctx.fill(); }
+        constructor(x, y) {
+            this.x = x; this.y = y;
+            this.vx = (Math.random()-0.5)*4; this.vy = 2;
+        }
+        update() {
+            this.vy += gravity; this.x += this.vx; this.y += this.vy;
+            if(this.x<5 || this.x>width-5) this.vx *= -bounceFactor;
+        }
+        draw() {
+            ctx.fillStyle = "#4fc3f7"; ctx.beginPath();
+            ctx.arc(this.x, this.y, 6, 0, Math.PI*2); ctx.fill();
+        }
     }
 
     function initBoard() {
-        pegs = []; buckets = [];
         width = window.innerWidth; height = window.innerHeight;
         canvas.width = width; canvas.height = height;
-        paddle.y = height * 0.15; paddle.x = width/2;
-        for(let r=0; r<8; r++) {
-            for(let c=0; c<7; c++) {
-                pegs.push({ x: c * (width/6) + (r%2 ? 20 : 0), y: height*0.3 + r*50, r: 5, type: 0, flash: 0 });
+        pegs = [];
+        for(let r=0; r<9; r++) {
+            let cols = (r%2 === 0) ? 7 : 8;
+            for(let c=0; c<cols; c++) {
+                pegs.push({ x: (c+0.5) * (width/cols), y: height*0.25 + r*45, r: 4, f: 0 });
             }
         }
-        for(let i=0; i<5; i++) buckets.push({ x: i*(width/5), y: height-140, w: width/5, mult: (i%2?3:1) });
+        buckets = [];
+        for(let i=0; i<5; i++) buckets.push({ x: i*(width/5), w: width/5, m: (i===2 ? 5 : (i%2?3:1)) });
     }
 
     function resolve() {
         for(let i=balls.length-1; i>=0; i--) {
             let b = balls[i];
             for(let p of pegs) {
-                let dx = b.x - p.x, dy = b.y - p.y, dist = Math.sqrt(dx*dx+dy*dy);
-                if(dist < b.r + p.r) {
-                    b.vy *= -bounceFactor; b.vx += (Math.random()-0.5)*2; p.flash = 10;
-                    money += (baseHitValue * 0.1); tg.HapticFeedback.impactOccurred('light');
+                let dx = b.x - p.x, dy = b.y - p.y, d = Math.sqrt(dx*dx+dy*dy);
+                if(d < 10) {
+                    b.vy *= -bounceFactor; b.vx += (Math.random()-0.5)*3;
+                    money += (upgrades.mult.level * 0.1); p.f = 10;
+                    tg.HapticFeedback.impactOccurred('light');
                 }
             }
-            if(b.y > height-140) {
+            if(b.y > height-130) {
                 let idx = Math.floor(b.x / (width/5));
-                if(buckets[idx]) money += (baseHitValue * 10 * buckets[idx].mult);
-                balls.splice(i, 1); tg.HapticFeedback.notificationOccurred('success');
+                if(buckets[idx]) money += (upgrades.mult.level * 5 * buckets[idx].m);
+                balls.splice(i,1);
+                tg.HapticFeedback.notificationOccurred('success');
             }
         }
     }
 
-    let lastDrop = 0;
-    function loop(t) {
-        if(isGamePaused || AdManager.isAdPlaying) { requestAnimationFrame(loop); return; }
+    let lastAuto = 0;
+    function render(t) {
         ctx.fillStyle = "#111"; ctx.fillRect(0,0,width,height);
         
-        paddle.x += paddle.vx; if(paddle.x<30 || paddle.x>width-30) paddle.vx *= -1;
-        ctx.fillStyle = "#fff"; ctx.fillRect(paddle.x-30, paddle.y-5, 60, 10);
-
-        if(upgrades.auto.level > 0 && t - lastDrop > 2000 / upgrades.auto.level) {
-            balls.push(new Ball(paddle.x, paddle.y+10)); lastDrop = t;
+        // Auto drop logic
+        if(upgrades.auto.level > 0 && t - lastAuto > (3000 / upgrades.auto.level)) {
+            balls.push(new Ball(width/2 + (Math.random()-0.5)*40, height*0.1));
+            lastAuto = t;
         }
 
-        for(let p of pegs) { ctx.fillStyle = p.flash > 0 ? "#fff" : "#444"; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill(); if(p.flash>0) p.flash--; }
+        for(let p of pegs) {
+            ctx.fillStyle = p.f > 0 ? "#fff" : "#444";
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+            if(p.f > 0) p.f--;
+        }
         for(let b of balls) { b.update(); b.draw(); }
         
-        resolve(); updateUI(); requestAnimationFrame(loop);
+        resolve(); updateUI();
+        requestAnimationFrame(render);
     }
 
-    function buyUpgrade(type) {
-        let cost = type === 'auto' ? 100 * Math.pow(2.5, upgrades.auto.level) : (type==='mult' ? 250 * Math.pow(2.0, upgrades.mult.level-1) : 500 * Math.pow(3.0, upgrades.bounce.level));
-        if(money >= cost) {
-            money -= cost; upgrades[type].level++;
-            if(type==='mult') baseHitValue = upgrades.mult.level;
-            if(type==='bounce') bounceFactor = Math.min(0.8, 0.5 + (upgrades.bounce.level * 0.07));
-            saveGame();
-        }
-    }
-
-    window.addEventListener('pointerdown', (e) => { 
+    window.addEventListener('pointerdown', (e) => {
         if(e.target.closest('button')) return;
-        if(!audioCtx) audioCtx = new AudioContext();
-        balls.push(new Ball(paddle.x, paddle.y+10)); 
+        balls.push(new Ball(e.clientX, height*0.1));
     });
 
-    // Modals
-    function openSettings() { isGamePaused = true; settingsOverlay.style.display = 'flex'; }
-    function closeModals() { isGamePaused = false; settingsOverlay.style.display = 'none'; }
-    function hardReset() { tg.CloudStorage.removeItem('pachinko_save', () => location.reload()); }
-
-    let audioCtx = null;
+    window.addEventListener('resize', initBoard);
     loadGame();
-    requestAnimationFrame(loop);
+    requestAnimationFrame(render);
 </script>
 </body>
 </html>
