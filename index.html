@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ASMR Pachinko Idle - iOS Maximum Performance</title>
+    <title>ASMR Pachinko Idle - Stable TMA</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
@@ -27,6 +27,7 @@
             opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 15;
         }
 
+        /* Top Right Buttons */
         .top-btn {
             position: absolute; top: 15px; z-index: 20;
             background: transparent; border: none; font-size: 24px; cursor: pointer;
@@ -66,6 +67,7 @@
 
         .upgrade-btn *, .top-btn *, .btn-skill * { pointer-events: none; }
 
+        /* --- MODAL UI --- */
         .modal-overlay {
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); z-index: 100; justify-content: center; align-items: center; flex-direction: column;
@@ -447,9 +449,8 @@
     function playFeverChord() { if (isAudioMuted || !audioCtx || audioCtx.state !== 'running') return; [261.63, 329.63, 392.00, 523.25].forEach(freq => { const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime); gainNode.gain.setValueAtTime(0, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.05, audioCtx.currentTime + 0.1); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2); osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 2); }); }
     function playNote(pegY, isSpecial = false) { if (isAudioMuted || !audioCtx || audioCtx.state !== 'running' || audioCtx.currentTime - lastNoteTime < 0.05) return; lastNoteTime = audioCtx.currentTime; const noteIndex = Math.floor((1 - (pegY / height)) * (scale.length - 1)); const freq = scale[Math.max(0, Math.min(noteIndex, scale.length - 1))] * (isSpecial ? 2 : 1) * (feverActive ? 1.5 : 1); const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain(); osc.type = isSpecial || feverActive ? 'triangle' : 'sine'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime); gainNode.gain.setValueAtTime(0, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(isSpecial || feverActive ? 0.08 : 0.06, audioCtx.currentTime + 0.05); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1); osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 1); }
 
-    const MAX_PARTICLES = 100; const MAX_TEXTS = 30; // Further reduced for maximum iOS performance
+    const MAX_PARTICLES = 100; const MAX_TEXTS = 30;
     
-    // --- PERFORMANCE FIX: Removed individual font setting from the text class ---
     class FloatingText { constructor(x, y, text, color) { this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.vy = -1.5; } update() { this.y += this.vy; this.life -= 0.02; } }
     class Particle { constructor(x, y, color) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 6; this.vy = (Math.random() - 0.5) * 6; this.life = 1.0; this.decay = Math.random() * 0.05 + 0.02; this.color = color; this.size = Math.random() * 3 + 1; } update() { this.x += this.vx; this.y += this.vy; this.life -= this.decay; } draw() { ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1.0; } }
     
@@ -487,8 +488,6 @@
 
     function drawFeverBar() {
         const barWidth = Math.min(300, width * 0.6); const barX = (width - barWidth) / 2; const barY = 20;
-        
-        // --- PERFORMANCE FIX: No shadow blur ---
         ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; ctx.fillRect(barX, barY, barWidth, 15);
         const fillPercent = feverActive ? (feverFramesLeft / getFeverDuration()) : (feverCharge / MAX_FEVER);
         ctx.fillStyle = feverCooldown > 0 ? "#555" : (feverActive ? `hsl(${Date.now() % 360}, 100%, 50%)` : "#ff007f"); ctx.fillRect(barX, barY, barWidth * fillPercent, 15);
@@ -545,8 +544,6 @@
                     }
                 }
                 
-                // --- GC / MEMORY LEAK FIX ---
-                // Do not use balls.splice() inside the loop. Let the master cleanup loop handle it.
                 b.y = height + 1000; 
                 updateUI();
             }
@@ -568,8 +565,17 @@
             if (feverCooldown > 0) feverCooldown--;
 
             let currentPaddleSpeed = feverActive ? (paddle.vx > 0 ? 12 : -12) : (paddle.vx > 0 ? 4 : -4);
-            paddle.x += currentPaddleSpeed; paddle.vx = currentPaddleSpeed; 
-            if (paddle.x - paddle.width/2 < 0 || paddle.x + paddle.width/2 > width) paddle.vx *= -1;
+            paddle.x += currentPaddleSpeed; 
+            paddle.vx = currentPaddleSpeed; 
+            
+            // --- PADDLE STUCK FIX (Clamping) ---
+            if (paddle.x - paddle.width/2 <= 0) { 
+                paddle.x = paddle.width/2; 
+                paddle.vx = Math.abs(paddle.vx); 
+            } else if (paddle.x + paddle.width/2 >= width) { 
+                paddle.x = width - paddle.width/2; 
+                paddle.vx = -Math.abs(paddle.vx); 
+            }
             
             ctx.fillStyle = '#fff';
             ctx.fillRect(paddle.x - paddle.width/2, paddle.y - paddle.height/2, paddle.width, paddle.height);
@@ -613,7 +619,6 @@
                 if (goblin.x < -100 || goblin.x > width + 100) { goblin.active = false; lastGoblinSpawnTime = Date.now(); }
             }
             
-            // --- IN-PLACE CLEANUP (NO MORE MEMORY LEAKS) ---
             for (let i = balls.length - 1; i >= 0; i--) {
                 let b = balls[i];
                 if (b.y > height + 200 || isNaN(b.x) || isNaN(b.y)) { balls.splice(i, 1); } 
@@ -622,7 +627,6 @@
 
             for (let i = particles.length - 1; i >= 0; i--) { particles[i].update(); particles[i].draw(); if (particles[i].life <= 0) particles.splice(i, 1); }
             
-            // --- BATCH TEXT RENDERING (STOPS FONT THRASHING) ---
             ctx.font = "bold 16px sans-serif";
             ctx.textAlign = "center";
             for (let i = floatingTexts.length - 1; i >= 0; i--) { 
@@ -633,7 +637,7 @@
                 ft.update(); 
                 if (ft.life <= 0) floatingTexts.splice(i, 1); 
             }
-            ctx.globalAlpha = 1.0; // Reset once
+            ctx.globalAlpha = 1.0; 
 
             resolveCollisions(); 
             ctx.restore(); 
