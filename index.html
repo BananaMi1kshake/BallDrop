@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ASMR Pachinko Idle - iOS Optimized</title>
+    <title>ASMR Pachinko Idle - iOS Maximum Performance</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
@@ -271,7 +271,7 @@
     function getFeverDuration() { return 600 + (metaSkills.feverTime.level * 60); }
     function getMutationRate() { return 0.015 + (metaSkills.mutationRate.level * 0.01); }
 
-    const SAVE_KEY = 'asmrPachinkoSaveData_v12'; 
+    const SAVE_KEY = 'asmrPachinkoSaveData_v14'; 
 
     let stats = { ballsDropped: 0, goldHit: 0, portalsHit: 0, feversTriggered: 0 };
     let activeMissions = []; let missionsCompleted = 0;
@@ -309,7 +309,7 @@
 
     window.claimMission = function(index, reward) {
         haptic('medium'); money += reward; 
-        spawnFloatingText(width/2, height/2, `MISSION COMPLETE! +$${formatMoney(reward)}`, '#0f0', 24);
+        spawnFloatingText(width/2, height/2, `+ $${formatMoney(reward)}`, '#0f0');
         spawnParticles(width/2, height/2, '#0f0', 30); missionsCompleted++;
         activeMissions[index] = generateMission(); renderMissions(); updateUI(); saveGame(); checkMissions();
     };
@@ -428,7 +428,7 @@
         if (money >= PRESTIGE_COST) {
             AdManager.showInterstitial(() => {
                 let earnedShards = prestigeLevel + 1; neonShards += earnedShards;
-                spawnFloatingText(width/2, height/2, `PRESTIGE! +💎${earnedShards} Shards`, '#e040fb', 30);
+                spawnFloatingText(width/2, height/2, `+💎${earnedShards}`, '#e040fb');
                 money = 0; prestigeLevel++; prestigeMultiplier = 1 + (prestigeLevel * 2);
                 upgrades.auto.level = 0; upgrades.mult.level = 1; upgrades.bounce.level = 0;
                 baseHitValue = 1; bounceFactor = 0.5; balls = []; particles = []; 
@@ -447,11 +447,13 @@
     function playFeverChord() { if (isAudioMuted || !audioCtx || audioCtx.state !== 'running') return; [261.63, 329.63, 392.00, 523.25].forEach(freq => { const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime); gainNode.gain.setValueAtTime(0, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.05, audioCtx.currentTime + 0.1); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2); osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 2); }); }
     function playNote(pegY, isSpecial = false) { if (isAudioMuted || !audioCtx || audioCtx.state !== 'running' || audioCtx.currentTime - lastNoteTime < 0.05) return; lastNoteTime = audioCtx.currentTime; const noteIndex = Math.floor((1 - (pegY / height)) * (scale.length - 1)); const freq = scale[Math.max(0, Math.min(noteIndex, scale.length - 1))] * (isSpecial ? 2 : 1) * (feverActive ? 1.5 : 1); const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain(); osc.type = isSpecial || feverActive ? 'triangle' : 'sine'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime); gainNode.gain.setValueAtTime(0, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(isSpecial || feverActive ? 0.08 : 0.06, audioCtx.currentTime + 0.05); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1); osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 1); }
 
-    const MAX_PARTICLES = 150; const MAX_TEXTS = 50;
-    class FloatingText { constructor(x, y, text, color, size = 16) { this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.vy = -1.5; this.size = size; } update() { this.y += this.vy; this.life -= 0.02; } draw() { ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.font = `bold ${this.size}px sans-serif`; ctx.textAlign = "center"; ctx.fillText(this.text, this.x, this.y); ctx.globalAlpha = 1.0; } }
+    const MAX_PARTICLES = 100; const MAX_TEXTS = 30; // Further reduced for maximum iOS performance
+    
+    // --- PERFORMANCE FIX: Removed individual font setting from the text class ---
+    class FloatingText { constructor(x, y, text, color) { this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.vy = -1.5; } update() { this.y += this.vy; this.life -= 0.02; } }
     class Particle { constructor(x, y, color) { this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 6; this.vy = (Math.random() - 0.5) * 6; this.life = 1.0; this.decay = Math.random() * 0.05 + 0.02; this.color = color; this.size = Math.random() * 3 + 1; } update() { this.x += this.vx; this.y += this.vy; this.life -= this.decay; } draw() { ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1.0; } }
     
-    function spawnFloatingText(x, y, text, color, size) { if (floatingTexts.length < MAX_TEXTS && !isNaN(x) && !isNaN(y)) floatingTexts.push(new FloatingText(x, y, text, color, size)); }
+    function spawnFloatingText(x, y, text, color) { if (floatingTexts.length < MAX_TEXTS && !isNaN(x) && !isNaN(y)) floatingTexts.push(new FloatingText(x, y, text, color)); }
     function spawnParticles(x, y, color, count) { if (isNaN(x) || isNaN(y)) return; let spawnCount = Math.min(count, MAX_PARTICLES - particles.length); for(let i=0; i<spawnCount; i++) particles.push(new Particle(x, y, color)); }
 
     class Ball { 
@@ -485,6 +487,8 @@
 
     function drawFeverBar() {
         const barWidth = Math.min(300, width * 0.6); const barX = (width - barWidth) / 2; const barY = 20;
+        
+        // --- PERFORMANCE FIX: No shadow blur ---
         ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; ctx.fillRect(barX, barY, barWidth, 15);
         const fillPercent = feverActive ? (feverFramesLeft / getFeverDuration()) : (feverCharge / MAX_FEVER);
         ctx.fillStyle = feverCooldown > 0 ? "#555" : (feverActive ? `hsl(${Date.now() % 360}, 100%, 50%)` : "#ff007f"); ctx.fillRect(barX, barY, barWidth * fillPercent, 15);
@@ -517,7 +521,7 @@
                     if (pType === 1) { earned *= 10; spawnParticles(p.x, p.y, '#ffd700', 10); p.type = 0; stats.goldHit++; checkMissions(); } money += earned;
                     let textStr = (isComboActive || pType > 0 || feverActive) ? `+${earned.toFixed(1)}!` : `+${earned.toFixed(1)}`;
                     let textColor = feverActive ? `hsl(${Math.random()*360}, 100%, 60%)` : (pType === 1 ? '#ffd700' : (pType === 2 ? '#ff3300' : (pType === 3 ? '#aa00ff' : (isComboActive ? "#fff" : b.color))));
-                    spawnFloatingText(p.x, p.y - 10, textStr, textColor, isComboActive || feverActive || pType > 0 ? 20 : 14);
+                    spawnFloatingText(p.x, p.y - 10, textStr, textColor);
                     if (pType === 0) spawnParticles(p.x, p.y, b.color, isComboActive || feverActive ? 6 : 3);
                     
                     if (pType === 0 && Math.random() < getMutationRate()) p.type = Math.floor(Math.random() * 3) + 1; 
@@ -530,7 +534,7 @@
                     let bk = buckets[bucketIndex]; let feverMultiplier = feverActive ? 3 : 1; let comboMultiplier = Math.min(5, 1 + Math.floor(b.combo / 5)); 
                     let earned = (baseHitValue * 10 * bk.mult * prestigeMultiplier * comboMultiplier * feverMultiplier);
                     money += earned; bk.flashTimer = 20;
-                    spawnFloatingText(b.x, b.y - 20, `+$${Math.floor(earned)}`, bk.color, 28);
+                    spawnFloatingText(b.x, b.y - 20, `+$${Math.floor(earned)}`, bk.color);
                     spawnParticles(b.x, b.y, bk.color, feverActive ? 40 : 20);
                     
                     if (bk.mult === 5) { haptic('medium'); shakeAmount = feverActive ? 25 : 15; }
@@ -540,7 +544,11 @@
                         if (feverCharge >= MAX_FEVER) { haptic('heavy'); feverActive = true; feverFramesLeft = getFeverDuration(); feverCharge = MAX_FEVER; shakeAmount = 30; playFeverChord(); stats.feversTriggered++; checkMissions(); }
                     }
                 }
-                balls.splice(i, 1); updateUI();
+                
+                // --- GC / MEMORY LEAK FIX ---
+                // Do not use balls.splice() inside the loop. Let the master cleanup loop handle it.
+                b.y = height + 1000; 
+                updateUI();
             }
         }
     }
@@ -563,7 +571,6 @@
             paddle.x += currentPaddleSpeed; paddle.vx = currentPaddleSpeed; 
             if (paddle.x - paddle.width/2 < 0 || paddle.x + paddle.width/2 > width) paddle.vx *= -1;
             
-            // --- REMOVED shadowBlur (iOS Optimization) ---
             ctx.fillStyle = '#fff';
             ctx.fillRect(paddle.x - paddle.width/2, paddle.y - paddle.height/2, paddle.width, paddle.height);
 
@@ -582,34 +589,19 @@
                 if (bk.flashTimer > 0) bk.flashTimer--;
             }
 
-            // --- iOS GPU OPTIMIZED PEG RENDERING (Fake Glow) ---
             for (let p of pegs) {
                 p.pulse += 0.1; 
                 
                 if (p.flashTimer > 0) { 
-                    ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 2.5, 0, Math.PI * 2);
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.fill(); ctx.closePath();
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 2.5, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.fill(); ctx.closePath();
                     ctx.fillStyle = '#fff'; p.flashTimer--; 
                 } 
                 else { 
-                    if (p.type === 1) { 
-                        ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 2, 0, Math.PI * 2);
-                        ctx.fillStyle = 'rgba(255, 215, 0, 0.3)'; ctx.fill(); ctx.closePath();
-                        ctx.fillStyle = '#ffd700'; 
-                    } 
-                    else if (p.type === 2) { 
-                        ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * (1.5 + Math.sin(p.pulse)*0.5), 0, Math.PI * 2);
-                        ctx.fillStyle = 'rgba(255, 51, 0, 0.3)'; ctx.fill(); ctx.closePath();
-                        ctx.fillStyle = '#ff3300'; 
-                    } 
-                    else if (p.type === 3) { 
-                        ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 2.5, 0, Math.PI * 2);
-                        ctx.fillStyle = 'rgba(170, 0, 255, 0.3)'; ctx.fill(); ctx.closePath();
-                        ctx.fillStyle = '#aa00ff'; 
-                    } 
+                    if (p.type === 1) { ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 2, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255, 215, 0, 0.3)'; ctx.fill(); ctx.closePath(); ctx.fillStyle = '#ffd700'; } 
+                    else if (p.type === 2) { ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * (1.5 + Math.sin(p.pulse)*0.5), 0, Math.PI * 2); ctx.fillStyle = 'rgba(255, 51, 0, 0.3)'; ctx.fill(); ctx.closePath(); ctx.fillStyle = '#ff3300'; } 
+                    else if (p.type === 3) { ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 2.5, 0, Math.PI * 2); ctx.fillStyle = 'rgba(170, 0, 255, 0.3)'; ctx.fill(); ctx.closePath(); ctx.fillStyle = '#aa00ff'; } 
                     else { ctx.fillStyle = currentTheme.pegOff; } 
                 }
-                
                 ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill(); ctx.closePath();
                 if (p.type === 3 && p.flashTimer <= 0) { ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 0.5, 0, Math.PI * 2); ctx.fillStyle = '#000'; ctx.fill(); ctx.closePath(); }
             }
@@ -621,13 +613,32 @@
                 if (goblin.x < -100 || goblin.x > width + 100) { goblin.active = false; lastGoblinSpawnTime = Date.now(); }
             }
             
-            balls = balls.filter(b => !isNaN(b.x) && !isNaN(b.y));
+            // --- IN-PLACE CLEANUP (NO MORE MEMORY LEAKS) ---
+            for (let i = balls.length - 1; i >= 0; i--) {
+                let b = balls[i];
+                if (b.y > height + 200 || isNaN(b.x) || isNaN(b.y)) { balls.splice(i, 1); } 
+                else { b.update(); b.draw(); }
+            }
 
-            for (let b of balls) { b.update(); b.draw(); }
             for (let i = particles.length - 1; i >= 0; i--) { particles[i].update(); particles[i].draw(); if (particles[i].life <= 0) particles.splice(i, 1); }
-            for (let i = floatingTexts.length - 1; i >= 0; i--) { floatingTexts[i].update(); floatingTexts[i].draw(); if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1); }
+            
+            // --- BATCH TEXT RENDERING (STOPS FONT THRASHING) ---
+            ctx.font = "bold 16px sans-serif";
+            ctx.textAlign = "center";
+            for (let i = floatingTexts.length - 1; i >= 0; i--) { 
+                let ft = floatingTexts[i];
+                ctx.globalAlpha = Math.max(0, ft.life);
+                ctx.fillStyle = ft.color;
+                ctx.fillText(ft.text, ft.x, ft.y);
+                ft.update(); 
+                if (ft.life <= 0) floatingTexts.splice(i, 1); 
+            }
+            ctx.globalAlpha = 1.0; // Reset once
 
-            resolveCollisions(); ctx.restore(); drawFeverBar(); updateUI(); 
+            resolveCollisions(); 
+            ctx.restore(); 
+            drawFeverBar(); 
+            updateUI(); 
 
         } catch(e) {
             ctx.restore(); 
